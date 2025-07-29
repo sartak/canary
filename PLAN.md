@@ -10,13 +10,13 @@
 
 ### Basic Keyboard UI
 - [x] Create minimal keyboard view controller
-- [ ] Add two basic key buttons (e.g., 'A' and 'B')
+- [x] Add two basic key buttons (e.g., 'A' and 'B')
 - [x] Add globe/next keyboard button with proper switching functionality ([Apple docs](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/CustomKeyboard.html#//apple_ref/doc/uid/TP40014214-CH16-SW4))
-- [ ] Implement basic key press handling
+- [x] Implement basic key press handling
 
 ### iOS Integration
 - [x] Verify keyboard can be enabled and selected
-- [ ] Test basic character input works in multiple apps
+- [x] Test basic character input works in multiple apps
 
 ## Milestone 2: Self-Hosting Keyboard
 **Goal**: Complete Canary layout that can handle everyday English typing
