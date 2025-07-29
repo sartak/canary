@@ -22,10 +22,11 @@
 **Goal**: Complete Canary layout that can handle everyday English typing
 
 ### Implement Alphabet Entry
-- [ ] Define Canary layout data structure
-- [ ] Create dynamic key generation from layout definition
-- [ ] Add all letters (a-z) with proper Canary positioning
-- [ ] Implement basic backspace functionality
+- [x] Define Canary layout data structure
+- [x] Create dynamic key generation from layout definition
+- [x] Render all letters (a-z) with proper Canary positioning
+- [ ] Make each letter produce its character on press
+- [ ] Make space, backspace, and return keys perform their respective actions
 
 ### Keyboard Layers
 - [ ] Create layer switching mechanism and state management
