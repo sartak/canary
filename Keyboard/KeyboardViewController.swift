@@ -7,108 +7,189 @@
 
 import UIKit
 
-class KeyboardViewController: UIInputViewController {
+enum Layer {
+    case alpha
+    case symbol
+    case number
+}
 
-    @IBOutlet var nextKeyboardButton: UIButton!
-    private var keyA: UIButton!
-    private var keyB: UIButton!
-    
-    override func updateViewConstraints() {
-        super.updateViewConstraints()
-        
-        // Add custom view sizing constraints here
+enum KeyType {
+    case simple(Character)
+    case backspace
+    case shift
+    case enter
+    case space
+    case layerSwitch(Layer)
+
+    func backgroundColor() -> UIColor {
+        switch self {
+        case .simple, .space:
+            return UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0)
+        case .backspace, .shift, .enter, .layerSwitch:
+            return UIColor(red: 63/255.0, green: 63/255.0, blue: 63/255.0, alpha: 1.0)
+        }
     }
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        setupKeys()
-        setupNextKeyboardButton()
-        setupLayout()
+
+    func width(alphaKeyWidth: CGFloat, specialKeyWidth: CGFloat, spaceKeyWidth: CGFloat) -> CGFloat {
+        switch self {
+        case .space:
+            return spaceKeyWidth
+        case .layerSwitch, .shift, .backspace:
+            return specialKeyWidth
+        case .simple, .enter:
+            return alphaKeyWidth
+        }
     }
-    
-    private func setupKeys() {
-        // Create key A
-        keyA = UIButton(type: .system)
-        keyA.setTitle("A", for: .normal)
-        keyA.titleLabel?.font = UIFont.systemFont(ofSize: 24)
-        keyA.backgroundColor = UIColor.systemGray5
-        keyA.layer.cornerRadius = 8
-        keyA.translatesAutoresizingMaskIntoConstraints = false
-        keyA.addTarget(self, action: #selector(keyPressed(_:)), for: .touchUpInside)
-        
-        // Create key B
-        keyB = UIButton(type: .system)
-        keyB.setTitle("B", for: .normal)
-        keyB.titleLabel?.font = UIFont.systemFont(ofSize: 24)
-        keyB.backgroundColor = UIColor.systemGray5
-        keyB.layer.cornerRadius = 8
-        keyB.translatesAutoresizingMaskIntoConstraints = false
-        keyB.addTarget(self, action: #selector(keyPressed(_:)), for: .touchUpInside)
-        
-        view.addSubview(keyA)
-        view.addSubview(keyB)
+
+    func label() -> String {
+        switch self {
+        case .simple(let char):
+            return String(char)
+        case .backspace:
+            return "⌫"
+        case .shift:
+            return "⇧"
+        case .enter:
+            return "↩︎"
+        case .space:
+            return ""
+        case .layerSwitch(let layer):
+            switch layer {
+            case .symbol:
+                return "λ"
+            case .number:
+                return "#"
+            case .alpha:
+                return "ABC"
+            }
+        }
     }
-    
-    private func setupNextKeyboardButton() {
-        nextKeyboardButton = UIButton(type: .system)
-        nextKeyboardButton.setTitle("🌐", for: .normal)
-        nextKeyboardButton.titleLabel?.font = UIFont.systemFont(ofSize: 20)
-        nextKeyboardButton.backgroundColor = UIColor.systemGray4
-        nextKeyboardButton.layer.cornerRadius = 8
-        nextKeyboardButton.translatesAutoresizingMaskIntoConstraints = false
-        nextKeyboardButton.addTarget(self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
-        
-        view.addSubview(nextKeyboardButton)
+
+    func fontSize() -> CGFloat {
+        switch self {
+        case .simple, .space, .empty:
+            return 22
+        case .backspace, .shift, .enter, .layerSwitch:
+            return 16
+        }
     }
-    
-    private func setupLayout() {
+}
+
+struct CanaryLayout {
+    static let rows: [[KeyType]] = [
+        [.simple("w"), .simple("l"), .simple("y"), .simple("p"), .simple("b"), .simple("z"), .simple("f"), .simple("o"), .simple("u"), .simple("'")],
+        [.simple("c"), .simple("r"), .simple("s"), .simple("t"), .simple("g"), .simple("m"), .simple("n"), .simple("e"), .simple("i"), .simple("a")],
+        [.simple("q"), .simple("j"), .simple("v"), .simple("d"), .simple("k"), .simple("x"), .simple("h"), .simple("."), .simple(","), .enter],
+        [.layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
+    ]
+}
+
+class KeyboardViewController: UIInputViewController {
+    private let alphaKeyWidth: CGFloat = 32
+    private let horizontalGap: CGFloat = 6
+    private var verticalGap: CGFloat = 12
+    private var specialKeyWidth: CGFloat { alphaKeyWidth * 1.5 + horizontalGap * 0.5 }
+    private var spaceKeyWidth: CGFloat { alphaKeyWidth * 2 + horizontalGap }
+    private let keyHeight: CGFloat = 36
+    private let splitWidth: CGFloat = 10
+    private let topPadding: CGFloat = 24
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        setupKeyboard()
+    }
+
+    private func setupKeyboard() {
+        let keyboardView = createKeyboardView()
+        view.addSubview(keyboardView)
+
+        keyboardView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            // Key A
-            keyA.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: -60),
-            keyA.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            keyA.widthAnchor.constraint(equalToConstant: 50),
-            keyA.heightAnchor.constraint(equalToConstant: 50),
-            
-            // Key B
-            keyB.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: 60),
-            keyB.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            keyB.widthAnchor.constraint(equalToConstant: 50),
-            keyB.heightAnchor.constraint(equalToConstant: 50),
-            
-            // Next keyboard button
-            nextKeyboardButton.leftAnchor.constraint(equalTo: view.leftAnchor, constant: 8),
-            nextKeyboardButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8),
-            nextKeyboardButton.widthAnchor.constraint(equalToConstant: 40),
-            nextKeyboardButton.heightAnchor.constraint(equalToConstant: 40)
+            keyboardView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            keyboardView.topAnchor.constraint(equalTo: view.topAnchor),
+            keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
-    
-    @objc private func keyPressed(_ sender: UIButton) {
-        guard let title = sender.currentTitle else { return }
-        textDocumentProxy.insertText(title.lowercased())
-    }
-    
-    override func viewWillLayoutSubviews() {
-        self.nextKeyboardButton.isHidden = !self.needsInputModeSwitchKey
-        super.viewWillLayoutSubviews()
-    }
-    
-    override func textWillChange(_ textInput: UITextInput?) {
-        // The app is about to change the document's contents. Perform any preparation here.
-    }
-    
-    override func textDidChange(_ textInput: UITextInput?) {
-        // The app has just changed the document's contents, the document context has been updated.
-        
-        var textColor: UIColor
-        let proxy = self.textDocumentProxy
-        if proxy.keyboardAppearance == UIKeyboardAppearance.dark {
-            textColor = UIColor.white
-        } else {
-            textColor = UIColor.black
+
+    private func createKeyboardView() -> UIView {
+        let containerView = UIView()
+
+        var yOffset: CGFloat = topPadding + verticalGap
+
+        for (rowIndex, row) in CanaryLayout.rows.enumerated() {
+            createRowKeys(for: row, rowIndex: rowIndex, yOffset: yOffset, in: containerView)
+            yOffset += keyHeight + verticalGap
         }
-        self.nextKeyboardButton.setTitleColor(textColor, for: [])
+
+        return containerView
     }
 
+    private func createRowKeys(for row: [KeyType], rowIndex: Int, yOffset: CGFloat, in containerView: UIView) {
+        let rowWidth = calculateRowWidth(for: row, rowIndex: rowIndex)
+        let containerWidth = view.bounds.width
+
+        var rowStartX: CGFloat
+        if rowIndex == 3 {
+            // Bottom row: align the vertical gap positions across all rows
+            let referenceRowWidth = calculateRowWidth(for: CanaryLayout.rows[1], rowIndex: 1)
+            let referenceRowStart = (containerWidth - referenceRowWidth) / 2
+            // Position of gap in reference row (after 5 keys)
+            let referenceGapPosition = referenceRowStart + (alphaKeyWidth + horizontalGap) * 5
+            // Position where gap should be in bottom row (after Bksp)
+            let bottomRowGapPosition = (specialKeyWidth + horizontalGap) * 2 + specialKeyWidth + horizontalGap
+            rowStartX = referenceGapPosition - bottomRowGapPosition
+        } else {
+            rowStartX = (containerWidth - rowWidth) / 2
+        }
+
+        var xOffset: CGFloat = rowStartX
+
+        for (keyIndex, keyType) in row.enumerated() {
+            let keyButton = createKeyButton(keyType: keyType)
+            let keyWidth = keyType.width(alphaKeyWidth: alphaKeyWidth, specialKeyWidth: specialKeyWidth, spaceKeyWidth: spaceKeyWidth)
+
+            keyButton.frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: keyHeight)
+            containerView.addSubview(keyButton)
+
+            xOffset += keyWidth + horizontalGap
+
+            // Add split gap in the middle of all rows
+            let splitAfterIndex = (rowIndex == 3) ? 2 : (row.count / 2) - 1
+            if keyIndex == splitAfterIndex {
+                xOffset += splitWidth
+            }
+        }
+    }
+
+    private func calculateRowWidth(for row: [KeyType], rowIndex: Int) -> CGFloat {
+        var totalWidth: CGFloat = 0
+
+        for keyType in row {
+            totalWidth += keyType.width(alphaKeyWidth: alphaKeyWidth, specialKeyWidth: specialKeyWidth, spaceKeyWidth: spaceKeyWidth)
+        }
+
+        totalWidth += CGFloat(row.count - 1) * horizontalGap
+
+        // Add split gap for all rows
+        totalWidth += splitWidth
+
+        return totalWidth
+    }
+
+
+
+    private func createKeyButton(keyType: KeyType) -> UIButton {
+        let button = UIButton(type: .system)
+
+        let displayText = keyType.label()
+        button.setTitle(displayText, for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: keyType.fontSize(), weight: .regular)
+
+        button.backgroundColor = keyType.backgroundColor()
+        button.layer.cornerRadius = 5
+
+        return button
+    }
 }
