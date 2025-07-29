@@ -6,7 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		298BE5C52E39299800D66C92 /* Keyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 298BE5BE2E39299800D66C92 /* Keyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		298BE5C32E39299800D66C92 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 29F087E12E3923C400B0301D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 298BE5BD2E39299800D66C92;
+			remoteInfo = Keyboard;
+		};
 		29F087FE2E3923C500B0301D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 29F087E12E3923C400B0301D /* Project object */;
@@ -23,13 +34,35 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		298BE5C62E39299800D66C92 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				298BE5C52E39299800D66C92 /* Keyboard.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		298BE5BE2E39299800D66C92 /* Keyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Keyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		29F087E92E3923C400B0301D /* Canary.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Canary.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		29F087FD2E3923C500B0301D /* CanaryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CanaryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		29F088072E3923C500B0301D /* CanaryUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CanaryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		298BE5CA2E39299800D66C92 /* Exceptions for "Keyboard" folder in "Keyboard" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 298BE5BD2E39299800D66C92 /* Keyboard */;
+		};
 		29F0880F2E3923C500B0301D /* Exceptions for "Canary" folder in "Canary" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -40,6 +73,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		298BE5BF2E39299800D66C92 /* Keyboard */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				298BE5CA2E39299800D66C92 /* Exceptions for "Keyboard" folder in "Keyboard" target */,
+			);
+			path = Keyboard;
+			sourceTree = "<group>";
+		};
 		29F087EB2E3923C400B0301D /* Canary */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -61,6 +102,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		298BE5BB2E39299800D66C92 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		29F087E62E3923C400B0301D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -91,6 +139,7 @@
 				29F087EB2E3923C400B0301D /* Canary */,
 				29F088002E3923C500B0301D /* CanaryTests */,
 				29F0880A2E3923C500B0301D /* CanaryUITests */,
+				298BE5BF2E39299800D66C92 /* Keyboard */,
 				29F087EA2E3923C400B0301D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -101,6 +150,7 @@
 				29F087E92E3923C400B0301D /* Canary.app */,
 				29F087FD2E3923C500B0301D /* CanaryTests.xctest */,
 				29F088072E3923C500B0301D /* CanaryUITests.xctest */,
+				298BE5BE2E39299800D66C92 /* Keyboard.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -108,6 +158,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		298BE5BD2E39299800D66C92 /* Keyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 298BE5C92E39299800D66C92 /* Build configuration list for PBXNativeTarget "Keyboard" */;
+			buildPhases = (
+				298BE5BA2E39299800D66C92 /* Sources */,
+				298BE5BB2E39299800D66C92 /* Frameworks */,
+				298BE5BC2E39299800D66C92 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				298BE5BF2E39299800D66C92 /* Keyboard */,
+			);
+			name = Keyboard;
+			packageProductDependencies = (
+			);
+			productName = Keyboard;
+			productReference = 298BE5BE2E39299800D66C92 /* Keyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		29F087E82E3923C400B0301D /* Canary */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 29F088102E3923C500B0301D /* Build configuration list for PBXNativeTarget "Canary" */;
@@ -115,10 +187,12 @@
 				29F087E52E3923C400B0301D /* Sources */,
 				29F087E62E3923C400B0301D /* Frameworks */,
 				29F087E72E3923C400B0301D /* Resources */,
+				298BE5C62E39299800D66C92 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				298BE5C42E39299800D66C92 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				29F087EB2E3923C400B0301D /* Canary */,
@@ -186,6 +260,9 @@
 				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 1620;
 				TargetAttributes = {
+					298BE5BD2E39299800D66C92 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 					29F087E82E3923C400B0301D = {
 						CreatedOnToolsVersion = 16.2;
 					};
@@ -216,11 +293,19 @@
 				29F087E82E3923C400B0301D /* Canary */,
 				29F087FC2E3923C500B0301D /* CanaryTests */,
 				29F088062E3923C500B0301D /* CanaryUITests */,
+				298BE5BD2E39299800D66C92 /* Keyboard */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		298BE5BC2E39299800D66C92 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		29F087E72E3923C400B0301D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -245,6 +330,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		298BE5BA2E39299800D66C92 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		29F087E52E3923C400B0301D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -269,6 +361,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		298BE5C42E39299800D66C92 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 298BE5BD2E39299800D66C92 /* Keyboard */;
+			targetProxy = 298BE5C32E39299800D66C92 /* PBXContainerItemProxy */;
+		};
 		29F087FF2E3923C500B0301D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 29F087E82E3923C400B0301D /* Canary */;
@@ -282,6 +379,56 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		298BE5C72E39299800D66C92 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MWNU43S3CB;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Keyboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Keyboard;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = net.rpglanguage.Canary.Keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		298BE5C82E39299800D66C92 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MWNU43S3CB;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Keyboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Keyboard;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = net.rpglanguage.Canary.Keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		29F088112E3923C500B0301D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -538,6 +685,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		298BE5C92E39299800D66C92 /* Build configuration list for PBXNativeTarget "Keyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				298BE5C72E39299800D66C92 /* Debug */,
+				298BE5C82E39299800D66C92 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		29F087E42E3923C400B0301D /* Build configuration list for PBXProject "Canary" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

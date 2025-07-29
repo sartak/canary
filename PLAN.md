@@ -4,18 +4,18 @@
 **Goal**: Get a live keyboard extension running on iOS that works end-to-end
 
 ### Project Setup
-- [ ] Create new iOS app project with keyboard extension target
-- [ ] Configure proper entitlements and Info.plist settings for keyboard extension
-- [ ] Verify app builds and runs on device
+- [x] Create new iOS app project with keyboard extension target
+- [x] Configure proper entitlements and Info.plist settings for keyboard extension
+- [x] Verify app builds and runs on device
 
 ### Basic Keyboard UI
-- [ ] Create minimal keyboard view controller
+- [x] Create minimal keyboard view controller
 - [ ] Add two basic key buttons (e.g., 'A' and 'B')
-- [ ] Add globe/next keyboard button with proper switching functionality ([Apple docs](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/CustomKeyboard.html#//apple_ref/doc/uid/TP40014214-CH16-SW4))
+- [x] Add globe/next keyboard button with proper switching functionality ([Apple docs](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/CustomKeyboard.html#//apple_ref/doc/uid/TP40014214-CH16-SW4))
 - [ ] Implement basic key press handling
 
 ### iOS Integration
-- [ ] Verify keyboard can be enabled and selected
+- [x] Verify keyboard can be enabled and selected
 - [ ] Test basic character input works in multiple apps
 
 ## Milestone 2: Self-Hosting Keyboard
