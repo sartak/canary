@@ -30,7 +30,7 @@
 
 ### Keyboard Layers
 - [x] Create layer switching mechanism and state management
-- [ ] Add shift layer for capitals
+- [x] Add shift layer for capitals
 - [x] Implement complete symbol layer with all punctuation and symbols
 - [x] Implement number layer
 
