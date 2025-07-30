@@ -73,6 +73,25 @@ enum KeyType {
             return 16
         }
     }
+
+    func didTap(textDocumentProxy: UITextDocumentProxy) {
+        switch self {
+        case .simple(let char):
+            textDocumentProxy.insertText(String(char))
+        case .backspace:
+            textDocumentProxy.deleteBackward()
+        case .shift:
+            // TODO: Handle shift state
+            break
+        case .enter:
+            textDocumentProxy.insertText("\n")
+        case .space:
+            textDocumentProxy.insertText(" ")
+        case .layerSwitch(let layer):
+            // TODO: Handle layer switching
+            break
+        }
+    }
 }
 
 struct CanaryLayout {
@@ -85,6 +104,7 @@ struct CanaryLayout {
 }
 
 class KeyboardViewController: UIInputViewController {
+    private var keyTypeMap: [UIButton: KeyType] = [:]
     private let alphaKeyWidth: CGFloat = 32
     private let horizontalGap: CGFloat = 6
     private var verticalGap: CGFloat = 12
@@ -190,6 +210,14 @@ class KeyboardViewController: UIInputViewController {
         button.backgroundColor = keyType.backgroundColor()
         button.layer.cornerRadius = 5
 
+        button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
+        keyTypeMap[button] = keyType
+
         return button
+    }
+
+    @objc private func keyTapped(_ sender: UIButton) {
+        guard let keyType = keyTypeMap[sender] else { return }
+        keyType.didTap(textDocumentProxy: textDocumentProxy)
     }
 }
