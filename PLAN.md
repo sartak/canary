@@ -44,7 +44,7 @@
 - [x] Test iPad floating keyboard mode
 
 ### Layout Configuration
-- [ ] Add QWERTY layout
+- [x] Add QWERTY layout
 - [x] Add layout selection UI
 
 ## Milestone 4: UI Polish
@@ -57,6 +57,7 @@
 - [ ] Add keyboard dismiss button using dismissKeyboard()
 - [ ] Add key repeat for backspace (hold to continuously delete)
 - [ ] Implement caps lock functionality (double-tap shift or dedicated key)
+- [ ] Remove incorrect animation when the keyboard initially launches
 
 ## Milestone 5: Advanced Input
 **Goal**: Additional gesture-based input features
