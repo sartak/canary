@@ -25,8 +25,8 @@
 - [x] Define Canary layout data structure
 - [x] Create dynamic key generation from layout definition
 - [x] Render all letters (a-z) with proper Canary positioning
-- [ ] Make each letter produce its character on press
-- [ ] Make space, backspace, and return keys perform their respective actions
+- [x] Make each letter produce its character on press
+- [x] Make space, backspace, and return keys perform their respective actions
 
 ### Keyboard Layers
 - [ ] Create layer switching mechanism and state management
