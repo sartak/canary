@@ -20,6 +20,7 @@ enum KeyType {
     case enter
     case space
     case layerSwitch(Layer)
+    case empty
 
     func backgroundColor() -> UIColor {
         switch self {
@@ -27,6 +28,8 @@ enum KeyType {
             return UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0)
         case .backspace, .shift, .enter, .layerSwitch:
             return UIColor(red: 63/255.0, green: 63/255.0, blue: 63/255.0, alpha: 1.0)
+        case .empty:
+            return UIColor.clear
         }
     }
 
@@ -36,7 +39,7 @@ enum KeyType {
             return spaceKeyWidth
         case .layerSwitch, .shift, .backspace:
             return specialKeyWidth
-        case .simple, .enter:
+        case .simple, .enter, .empty:
             return alphaKeyWidth
         }
     }
@@ -62,6 +65,8 @@ enum KeyType {
             case .alpha:
                 return "ABC"
             }
+        case .empty:
+            return ""
         }
     }
 
@@ -74,7 +79,7 @@ enum KeyType {
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void) {
         switch self {
         case .simple(let char):
             textDocumentProxy.insertText(String(char))
@@ -88,22 +93,44 @@ enum KeyType {
         case .space:
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):
-            // TODO: Handle layer switching
+            layerSwitchHandler(layer)
+        case .empty:
+            // Do nothing for empty keys
             break
         }
     }
 }
 
 struct CanaryLayout {
-    static let rows: [[KeyType]] = [
-        [.simple("w"), .simple("l"), .simple("y"), .simple("p"), .simple("b"), .simple("z"), .simple("f"), .simple("o"), .simple("u"), .simple("'")],
-        [.simple("c"), .simple("r"), .simple("s"), .simple("t"), .simple("g"), .simple("m"), .simple("n"), .simple("e"), .simple("i"), .simple("a")],
-        [.simple("q"), .simple("j"), .simple("v"), .simple("d"), .simple("k"), .simple("x"), .simple("h"), .simple("."), .simple(","), .enter],
-        [.layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
-    ]
+    static func rows(for layer: Layer) -> [[KeyType]] {
+        switch layer {
+        case .alpha:
+            return [
+                [.simple("w"), .simple("l"), .simple("y"), .simple("p"), .simple("b"), .simple("z"), .simple("f"), .simple("o"), .simple("u"), .simple("'")],
+                [.simple("c"), .simple("r"), .simple("s"), .simple("t"), .simple("g"), .simple("m"), .simple("n"), .simple("e"), .simple("i"), .simple("a")],
+                [.simple("q"), .simple("j"), .simple("v"), .simple("d"), .simple("k"), .simple("x"), .simple("h"), .simple("."), .simple(","), .enter],
+                [.layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
+            ]
+        case .symbol:
+            return [
+                [.simple("`"), .simple("~"), .simple("\\"), .simple("{"), .simple("$"), .simple("%"), .simple("}"), .simple("/"), .simple("#"), .simple("'")],
+                [.simple("&"), .simple("*"), .simple("="), .simple("("), .simple("<"), .simple(">"), .simple(")"), .simple("-"), .simple("+"), .simple("|")],
+                [.simple("—"), .simple("@"), .simple("_"), .simple("["), .simple("…"), .simple("^"), .simple("]"), .simple("."), .simple(","), .enter],
+                [.layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.number)],
+            ]
+        case .number:
+            return [
+                [.empty, .simple("6"), .simple("5"), .simple("4"), .empty, .empty, .empty, .empty, .empty, .simple("'")],
+                [.empty, .simple("3"), .simple("2"), .simple("1"), .simple("0"), .empty, .empty, .empty, .empty, .empty],
+                [.empty, .simple("9"), .simple("8"), .simple("7"), .empty, .empty, .empty, .simple("."), .simple(","), .enter],
+                [.layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.symbol)],
+            ]
+        }
+    }
 }
 
 class KeyboardViewController: UIInputViewController {
+    private var currentLayer: Layer = .alpha
     private var keyTypeMap: [UIButton: KeyType] = [:]
     private let alphaKeyWidth: CGFloat = 32
     private let horizontalGap: CGFloat = 6
@@ -138,7 +165,7 @@ class KeyboardViewController: UIInputViewController {
 
         var yOffset: CGFloat = topPadding + verticalGap
 
-        for (rowIndex, row) in CanaryLayout.rows.enumerated() {
+        for (rowIndex, row) in CanaryLayout.rows(for: currentLayer).enumerated() {
             createRowKeys(for: row, rowIndex: rowIndex, yOffset: yOffset, in: containerView)
             yOffset += keyHeight + verticalGap
         }
@@ -153,7 +180,7 @@ class KeyboardViewController: UIInputViewController {
         var rowStartX: CGFloat
         if rowIndex == 3 {
             // Bottom row: align the vertical gap positions across all rows
-            let referenceRowWidth = calculateRowWidth(for: CanaryLayout.rows[1], rowIndex: 1)
+            let referenceRowWidth = calculateRowWidth(for: CanaryLayout.rows(for: currentLayer)[1], rowIndex: 1)
             let referenceRowStart = (containerWidth - referenceRowWidth) / 2
             // Position of gap in reference row (after 5 keys)
             let referenceGapPosition = referenceRowStart + (alphaKeyWidth + horizontalGap) * 5
@@ -219,6 +246,19 @@ class KeyboardViewController: UIInputViewController {
 
     @objc private func keyTapped(_ sender: UIButton) {
         guard let keyType = keyTypeMap[sender] else { return }
-        keyType.didTap(textDocumentProxy: textDocumentProxy)
+        keyType.didTap(textDocumentProxy: textDocumentProxy) { [weak self] newLayer in
+            self?.switchToLayer(newLayer)
+        }
+    }
+
+    private func switchToLayer(_ layer: Layer) {
+        currentLayer = layer
+        rebuildKeyboard()
+    }
+
+    private func rebuildKeyboard() {
+        view.subviews.forEach { $0.removeFromSuperview() }
+        keyTypeMap.removeAll()
+        setupKeyboard()
     }
 }

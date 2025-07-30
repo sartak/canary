@@ -29,10 +29,10 @@
 - [x] Make space, backspace, and return keys perform their respective actions
 
 ### Keyboard Layers
-- [ ] Create layer switching mechanism and state management
+- [x] Create layer switching mechanism and state management
 - [ ] Add shift layer for capitals
-- [ ] Implement complete symbol layer with all punctuation and symbols
-- [ ] Implement number layer
+- [x] Implement complete symbol layer with all punctuation and symbols
+- [x] Implement number layer
 
 ## Milestone 3: Layout Flexibility
 **Goal**: Make keyboard adapt to different devices, orientations, and layouts
