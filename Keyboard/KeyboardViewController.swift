@@ -7,6 +7,54 @@
 
 import UIKit
 
+struct DeviceLayout {
+    let alphaKeyWidth: CGFloat
+    let horizontalGap: CGFloat
+    let verticalGap: CGFloat
+    let keyHeight: CGFloat
+    let splitWidth: CGFloat
+    let topPadding: CGFloat
+    let bottomPadding: CGFloat
+
+    var specialKeyWidth: CGFloat { alphaKeyWidth * 1.5 + horizontalGap * 0.5 }
+    var spaceKeyWidth: CGFloat { alphaKeyWidth * 2 + horizontalGap }
+
+    static func forCurrentDevice(containerWidth: CGFloat, containerHeight: CGFloat) -> DeviceLayout {
+        // iPhone 16 Pro portrait baselines: 402pts width, 874pts height
+        let referenceWidth: CGFloat = 402
+        let referenceHeight: CGFloat = 874
+        let widthScale = containerWidth / referenceWidth
+        let heightScale = containerHeight / referenceHeight
+
+        // Reference values from working iPhone 16 Pro layout
+        let baseAlphaKeyWidth: CGFloat = 32
+        let baseHorizontalGap: CGFloat = 6
+        let baseVerticalGap: CGFloat = 12
+        let baseKeyHeight: CGFloat = 36
+        let baseSplitWidth: CGFloat = 10
+        let baseTopPadding = baseVerticalGap
+        let baseBottomPadding: CGFloat = 0
+
+        let layout = DeviceLayout(
+            alphaKeyWidth: baseAlphaKeyWidth * widthScale,
+            horizontalGap: baseHorizontalGap * widthScale,
+            verticalGap: baseVerticalGap * heightScale,
+            keyHeight: baseKeyHeight * heightScale,
+            splitWidth: baseSplitWidth * widthScale,
+            topPadding: baseTopPadding * heightScale,
+            bottomPadding: baseBottomPadding * heightScale
+        )
+
+        return layout
+    }
+
+    func totalKeyboardHeight(for layer: Layer, shifted: Bool) -> CGFloat {
+        let numberOfRows = CGFloat(CanaryLayout.rows(for: layer, shifted: shifted).count)
+        // topPadding + rows + gaps between rows + bottomPadding
+        return topPadding + (numberOfRows * keyHeight) + ((numberOfRows - 1) * verticalGap) + bottomPadding
+    }
+}
+
 enum Layer {
     case alpha
     case symbol
@@ -35,14 +83,14 @@ enum KeyType {
         }
     }
 
-    func width(alphaKeyWidth: CGFloat, specialKeyWidth: CGFloat, spaceKeyWidth: CGFloat) -> CGFloat {
+    func width(layout: DeviceLayout) -> CGFloat {
         switch self {
         case .space:
-            return spaceKeyWidth
+            return layout.spaceKeyWidth
         case .layerSwitch, .shift, .backspace:
-            return specialKeyWidth
+            return layout.specialKeyWidth
         case .simple, .enter, .empty:
-            return alphaKeyWidth
+            return layout.alphaKeyWidth
         }
     }
 
@@ -158,21 +206,31 @@ class KeyboardViewController: UIInputViewController {
     private var currentLayer: Layer = .alpha
     private var currentShifted: Bool = false
     private var keyTypeMap: [UIButton: KeyType] = [:]
-    private let alphaKeyWidth: CGFloat = 32
-    private let horizontalGap: CGFloat = 6
-    private var verticalGap: CGFloat = 12
-    private var specialKeyWidth: CGFloat { alphaKeyWidth * 1.5 + horizontalGap * 0.5 }
-    private var spaceKeyWidth: CGFloat { alphaKeyWidth * 2 + horizontalGap }
-    private let keyHeight: CGFloat = 36
-    private let splitWidth: CGFloat = 10
-    private let topPadding: CGFloat = 24
+    private var deviceLayout: DeviceLayout!
+    private var heightConstraint: NSLayoutConstraint?
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setupKeyboard()
     }
 
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: nil) { _ in
+            self.rebuildKeyboard()
+        }
+    }
+
     private func setupKeyboard() {
+        let screenBounds = UIScreen.main.bounds
+        let viewBounds = view.bounds
+        let isLandscape = screenBounds.width > screenBounds.height
+
+        let effectiveWidth = viewBounds.width
+        let effectiveHeight = isLandscape ? screenBounds.width : screenBounds.height
+
+        deviceLayout = DeviceLayout.forCurrentDevice(containerWidth: effectiveWidth, containerHeight: effectiveHeight)
+
         let keyboardView = createKeyboardView()
         view.addSubview(keyboardView)
 
@@ -183,16 +241,30 @@ class KeyboardViewController: UIInputViewController {
             keyboardView.topAnchor.constraint(equalTo: view.topAnchor),
             keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+
+        // Set explicit height constraint for the main view
+        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: currentShifted)
+        heightConstraint = NSLayoutConstraint(
+            item: view,
+            attribute: .height,
+            relatedBy: .equal,
+            toItem: nil,
+            attribute: .notAnAttribute,
+            multiplier: 1.0,
+            constant: calculatedHeight
+        )
+        heightConstraint?.priority = UILayoutPriority(999)
+        view.addConstraint(heightConstraint!)
     }
 
     private func createKeyboardView() -> UIView {
         let containerView = UIView()
 
-        var yOffset: CGFloat = topPadding + verticalGap
+        var yOffset: CGFloat = deviceLayout.topPadding
 
         for (rowIndex, row) in CanaryLayout.rows(for: currentLayer, shifted: currentShifted).enumerated() {
             createRowKeys(for: row, rowIndex: rowIndex, yOffset: yOffset, in: containerView)
-            yOffset += keyHeight + verticalGap
+            yOffset += deviceLayout.keyHeight + deviceLayout.verticalGap
         }
 
         return containerView
@@ -208,9 +280,9 @@ class KeyboardViewController: UIInputViewController {
             let referenceRowWidth = calculateRowWidth(for: CanaryLayout.rows(for: currentLayer, shifted: currentShifted)[1], rowIndex: 1)
             let referenceRowStart = (containerWidth - referenceRowWidth) / 2
             // Position of gap in reference row (after 5 keys)
-            let referenceGapPosition = referenceRowStart + (alphaKeyWidth + horizontalGap) * 5
+            let referenceGapPosition = referenceRowStart + (deviceLayout.alphaKeyWidth + deviceLayout.horizontalGap) * 5
             // Position where gap should be in bottom row (after Bksp)
-            let bottomRowGapPosition = (specialKeyWidth + horizontalGap) * 2 + specialKeyWidth + horizontalGap
+            let bottomRowGapPosition = (deviceLayout.specialKeyWidth + deviceLayout.horizontalGap) * 2 + deviceLayout.specialKeyWidth + deviceLayout.horizontalGap
             rowStartX = referenceGapPosition - bottomRowGapPosition
         } else {
             rowStartX = (containerWidth - rowWidth) / 2
@@ -220,17 +292,17 @@ class KeyboardViewController: UIInputViewController {
 
         for (keyIndex, keyType) in row.enumerated() {
             let keyButton = createKeyButton(keyType: keyType)
-            let keyWidth = keyType.width(alphaKeyWidth: alphaKeyWidth, specialKeyWidth: specialKeyWidth, spaceKeyWidth: spaceKeyWidth)
+            let keyWidth = keyType.width(layout: deviceLayout)
 
-            keyButton.frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: keyHeight)
+            keyButton.frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: deviceLayout.keyHeight)
             containerView.addSubview(keyButton)
 
-            xOffset += keyWidth + horizontalGap
+            xOffset += keyWidth + deviceLayout.horizontalGap
 
             // Add split gap in the middle of all rows
             let splitAfterIndex = (rowIndex == 3) ? 2 : (row.count / 2) - 1
             if keyIndex == splitAfterIndex {
-                xOffset += splitWidth
+                xOffset += deviceLayout.splitWidth
             }
         }
     }
@@ -239,13 +311,13 @@ class KeyboardViewController: UIInputViewController {
         var totalWidth: CGFloat = 0
 
         for keyType in row {
-            totalWidth += keyType.width(alphaKeyWidth: alphaKeyWidth, specialKeyWidth: specialKeyWidth, spaceKeyWidth: spaceKeyWidth)
+            totalWidth += keyType.width(layout: deviceLayout)
         }
 
-        totalWidth += CGFloat(row.count - 1) * horizontalGap
+        totalWidth += CGFloat(row.count - 1) * deviceLayout.horizontalGap
 
         // Add split gap for all rows
-        totalWidth += splitWidth
+        totalWidth += deviceLayout.splitWidth
 
         return totalWidth
     }
