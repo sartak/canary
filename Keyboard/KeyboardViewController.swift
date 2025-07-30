@@ -48,8 +48,8 @@ struct DeviceLayout {
         return layout
     }
 
-    func totalKeyboardHeight(for layer: Layer, shifted: Bool) -> CGFloat {
-        let numberOfRows = CGFloat(CanaryLayout.rows(for: layer, shifted: shifted).count)
+    func totalKeyboardHeight(for layer: Layer, shifted: Bool, layout: KeyboardLayout) -> CGFloat {
+        let numberOfRows = CGFloat(layout.rows(for: layer, shifted: shifted).count)
         // topPadding + rows + gaps between rows + bottomPadding
         return topPadding + (numberOfRows * keyHeight) + ((numberOfRows - 1) * verticalGap) + bottomPadding
     }
@@ -68,6 +68,7 @@ enum KeyType {
     case enter
     case space
     case layerSwitch(Layer)
+    case layoutSwitch(KeyboardLayout)
     case empty
 
     func backgroundColor(shifted: Bool) -> UIColor {
@@ -76,7 +77,7 @@ enum KeyType {
             return UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0)
         case .shift:
             return shifted ? UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0) : UIColor(red: 63/255.0, green: 63/255.0, blue: 63/255.0, alpha: 1.0)
-        case .backspace, .enter, .layerSwitch:
+        case .backspace, .enter, .layerSwitch, .layoutSwitch:
             return UIColor(red: 63/255.0, green: 63/255.0, blue: 63/255.0, alpha: 1.0)
         case .empty:
             return UIColor.clear
@@ -89,7 +90,7 @@ enum KeyType {
             return layout.spaceKeyWidth
         case .layerSwitch, .shift, .backspace:
             return layout.specialKeyWidth
-        case .simple, .enter, .empty:
+        case .simple, .enter, .layoutSwitch, .empty:
             return layout.alphaKeyWidth
         }
     }
@@ -115,6 +116,13 @@ enum KeyType {
             case .alpha:
                 return "ABC"
             }
+        case .layoutSwitch(let layout):
+            switch layout {
+            case .canary:
+                return "CAN"
+            case .qwerty:
+                return "QWE"
+            }
         case .empty:
             return ""
         }
@@ -124,12 +132,12 @@ enum KeyType {
         switch self {
         case .simple, .space, .empty:
             return 22
-        case .backspace, .shift, .enter, .layerSwitch:
+        case .backspace, .shift, .enter, .layerSwitch, .layoutSwitch:
             return 16
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void) {
         // Handle the key action
         switch self {
         case .simple(let char):
@@ -144,6 +152,8 @@ enum KeyType {
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):
             layerSwitchHandler(layer)
+        case .layoutSwitch(let layout):
+            layoutSwitchHandler(layout)
         case .empty:
             // Do nothing for empty keys
             break
@@ -153,7 +163,7 @@ enum KeyType {
         switch self {
         case .shift:
             break
-        case .simple, .backspace, .enter, .space, .layerSwitch:
+        case .simple, .backspace, .enter, .space, .layerSwitch, .layoutSwitch:
             autoUnshiftHandler()
         case .empty:
             break
@@ -161,8 +171,20 @@ enum KeyType {
     }
 }
 
-struct CanaryLayout {
-    static func rows(for layer: Layer, shifted: Bool) -> [[KeyType]] {
+enum KeyboardLayout {
+    case canary
+    case qwerty
+
+    func rows(for layer: Layer, shifted: Bool) -> [[KeyType]] {
+        switch self {
+        case .canary:
+            return canaryRows(for: layer, shifted: shifted)
+        case .qwerty:
+            return qwertyRows(for: layer, shifted: shifted)
+        }
+    }
+
+    private func canaryRows(for layer: Layer, shifted: Bool) -> [[KeyType]] {
         let apostrophe: KeyType = shifted ? .simple("\"") : .simple("'")
         let period: KeyType = shifted ? .simple("!") : .simple(".")
         let comma: KeyType = shifted ? .simple("?") : .simple(",")
@@ -193,10 +215,49 @@ struct CanaryLayout {
             ]
         case .number:
             return [
-                [.empty, .simple("6"), .simple("5"), .simple("4"), .empty, .empty, .empty, .empty, .empty, apostrophe],
+                [.empty, .simple("6"), .simple("5"), .simple("4"), .empty, .layoutSwitch(.qwerty), .empty, .empty, .empty, apostrophe],
                 [.empty, .simple("3"), .simple("2"), .simple("1"), .simple("0"), .empty, .empty, .empty, .empty, .empty],
                 [.empty, .simple("9"), .simple("8"), .simple("7"), .empty, .empty, .empty, period, comma, .enter],
                 [.layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.symbol)],
+            ]
+        }
+    }
+    
+    private func qwertyRows(for layer: Layer, shifted: Bool) -> [[KeyType]] {
+        let apostrophe: KeyType = shifted ? .simple("\"") : .simple("'")
+        let period: KeyType = shifted ? .simple("!") : .simple(".")
+        let comma: KeyType = shifted ? .simple("?") : .simple(",")
+
+        switch layer {
+        case .alpha:
+            if shifted {
+                return [
+                    [.simple("Q"), .simple("W"), .simple("E"), .simple("R"), .simple("T"), .simple("Y"), .simple("U"), .simple("I"), .simple("O"), .simple("P")],
+                    [.simple("A"), .simple("S"), .simple("D"), .simple("F"), .simple("G"), .simple("H"), .simple("J"), .simple("K"), .simple("L")],
+                    [.shift, .simple("Z"), .simple("X"), .simple("C"), .simple("V"), .simple("B"), .simple("N"), .simple("M"), .backspace],
+                    [.layerSwitch(.number), .layoutSwitch(.canary), .space, .enter],
+                ]
+            } else {
+                return [
+                    [.simple("q"), .simple("w"), .simple("e"), .simple("r"), .simple("t"), .simple("y"), .simple("u"), .simple("i"), .simple("o"), .simple("p")],
+                    [.simple("a"), .simple("s"), .simple("d"), .simple("f"), .simple("g"), .simple("h"), .simple("j"), .simple("k"), .simple("l")],
+                    [.shift, .simple("z"), .simple("x"), .simple("c"), .simple("v"), .simple("b"), .simple("n"), .simple("m"), .backspace],
+                    [.layerSwitch(.number), .layoutSwitch(.canary), .space, .enter],
+                ]
+            }
+        case .symbol:
+            return [
+                [.simple("["), .simple("]"), .simple("{"), .simple("}"), .simple("#"), .simple("%"), .simple("^"), .simple("*"), .simple("+"), .simple("=")],
+                [.simple("_"), .simple("\\"), .simple("|"), .simple("~"), .simple("<"), .simple(">"), .simple("€"), .simple("£"), .simple("¥"), .simple("·")],
+                [.layerSwitch(.number), .simple("."), .simple(","), .simple("?"), .simple("!"), .simple("'"), .backspace],
+                [.layerSwitch(.alpha), .layoutSwitch(.canary), .space, .enter],
+            ]
+        case .number:
+            return [
+                [.simple("1"), .simple("2"), .simple("3"), .simple("4"), .simple("5"), .simple("6"), .simple("7"), .simple("8"), .simple("9"), .simple("0")],
+                [.simple("-"), .simple("/"), .simple(":"), .simple(";"), .simple("("), .simple(")"), .simple("$"), .simple("&"), .simple("@"), .simple("\"")],
+                [.layerSwitch(.symbol), .simple("."), .simple(","), .simple("?"), .simple("!"), .simple("'"), .backspace],
+                [.layerSwitch(.alpha), .layoutSwitch(.canary), .space, .enter],
             ]
         }
     }
@@ -208,6 +269,7 @@ class KeyboardViewController: UIInputViewController {
     private var keyTypeMap: [UIButton: KeyType] = [:]
     private var deviceLayout: DeviceLayout!
     private var heightConstraint: NSLayoutConstraint?
+    private var keyboardLayout: KeyboardLayout = .canary
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -243,7 +305,7 @@ class KeyboardViewController: UIInputViewController {
         ])
 
         // Set explicit height constraint for the main view
-        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: currentShifted)
+        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: currentShifted, layout: keyboardLayout)
         heightConstraint = NSLayoutConstraint(
             item: view,
             attribute: .height,
@@ -262,7 +324,7 @@ class KeyboardViewController: UIInputViewController {
 
         var yOffset: CGFloat = deviceLayout.topPadding
 
-        for (rowIndex, row) in CanaryLayout.rows(for: currentLayer, shifted: currentShifted).enumerated() {
+        for (rowIndex, row) in keyboardLayout.rows(for: currentLayer, shifted: currentShifted).enumerated() {
             createRowKeys(for: row, rowIndex: rowIndex, yOffset: yOffset, in: containerView)
             yOffset += deviceLayout.keyHeight + deviceLayout.verticalGap
         }
@@ -277,7 +339,7 @@ class KeyboardViewController: UIInputViewController {
         var rowStartX: CGFloat
         if rowIndex == 3 {
             // Bottom row: align the vertical gap positions across all rows
-            let referenceRowWidth = calculateRowWidth(for: CanaryLayout.rows(for: currentLayer, shifted: currentShifted)[1], rowIndex: 1)
+            let referenceRowWidth = calculateRowWidth(for: keyboardLayout.rows(for: currentLayer, shifted: currentShifted)[1], rowIndex: 1)
             let referenceRowStart = (containerWidth - referenceRowWidth) / 2
             // Position of gap in reference row (after 5 keys)
             let referenceGapPosition = referenceRowStart + (deviceLayout.alphaKeyWidth + deviceLayout.horizontalGap) * 5
@@ -347,6 +409,9 @@ class KeyboardViewController: UIInputViewController {
                       layerSwitchHandler: { [weak self] newLayer in
                           self?.switchToLayer(newLayer)
                       },
+                      layoutSwitchHandler: { [weak self] newLayout in
+                          self?.switchToLayout(newLayout)
+                      },
                       shiftHandler: { [weak self] in
                           self?.toggleShift()
                       },
@@ -369,6 +434,12 @@ class KeyboardViewController: UIInputViewController {
 
     private func switchToLayer(_ layer: Layer) {
         currentLayer = layer
+        rebuildKeyboard()
+    }
+    
+    private func switchToLayout(_ layout: KeyboardLayout) {
+        keyboardLayout = layout
+        currentLayer = .alpha
         rebuildKeyboard()
     }
 

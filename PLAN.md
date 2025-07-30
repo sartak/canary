@@ -45,7 +45,7 @@
 
 ### Layout Configuration
 - [ ] Add QWERTY layout
-- [ ] Add layout selection UI
+- [x] Add layout selection UI
 
 ## Milestone 4: UI Polish
 **Goal**: Make keyboard look and feel great
