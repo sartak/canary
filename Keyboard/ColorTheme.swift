@@ -71,4 +71,13 @@ enum ColorTheme {
     var keyShadowRadius: CGFloat {
         return 0.5
     }
+
+    var decorationColor: UIColor {
+        switch self {
+        case .dark:
+            return primaryKeyColor
+        case .light:
+            return .black
+        }
+    }
 }

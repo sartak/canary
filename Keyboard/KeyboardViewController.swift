@@ -18,6 +18,7 @@ class KeyboardViewController: UIInputViewController {
     private var keyboardLayout: KeyboardLayout = .canary
     private var needsGlobe: Bool = false
     private var keyPopouts: [Int: UIView] = [:]
+    private var dismissButton: UIButton!
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -81,6 +82,8 @@ class KeyboardViewController: UIInputViewController {
         )
         heightConstraint?.priority = UILayoutPriority(999)
         view.addConstraint(heightConstraint!)
+
+        setupDismissButton()
     }
 
     private func createKeyData() -> [KeyData] {
@@ -188,6 +191,64 @@ class KeyboardViewController: UIInputViewController {
         keyboardLayout = layout
         currentLayer = .alpha
         rebuildKeyboard()
+    }
+
+    private func setupDismissButton() {
+        dismissButton = UIButton(type: .system)
+        dismissButton.setTitle("", for: .normal)
+
+        let theme = ColorTheme.current(for: traitCollection)
+        dismissButton.tintColor = theme.decorationColor
+
+        // Create downward chevron using SF Symbols
+        let chevronConfig = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        let chevronImage = UIImage(systemName: "chevron.down", withConfiguration: chevronConfig)
+        dismissButton.setImage(chevronImage, for: .normal)
+
+        dismissButton.addTarget(self, action: #selector(handleDismissButton), for: .touchUpInside)
+
+        view.addSubview(dismissButton)
+        dismissButton.translatesAutoresizingMaskIntoConstraints = false
+
+        // Position the button flush right above the apostrophe key
+        let apostropheX = calculateApostropheKeyX()
+        let buttonSize: CGFloat = 24
+
+        NSLayoutConstraint.activate([
+            dismissButton.widthAnchor.constraint(equalToConstant: buttonSize),
+            dismissButton.heightAnchor.constraint(equalToConstant: buttonSize),
+            dismissButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -(view.bounds.width - apostropheX - deviceLayout.alphaKeyWidth)),
+            dismissButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 12)
+        ])
+    }
+
+    private func calculateApostropheKeyX() -> CGFloat {
+        let containerWidth = view.bounds.width
+        let firstRow = keyboardLayout.nodeRows(for: currentLayer, shifted: currentShifted, layout: deviceLayout, needsGlobe: needsGlobe)[0]
+        let rowWidth = Node.calculateRowWidth(for: firstRow)
+        let rowStartX = (containerWidth - rowWidth) / 2
+
+        var xOffset = rowStartX
+        for node in firstRow {
+            switch node {
+            case .key(let keyType, let keyWidth):
+                if case .simple(let char) = keyType, char == "'" || char == "\"" {
+                    return xOffset
+                }
+                xOffset += keyWidth
+            case .gap(let gapWidth):
+                xOffset += gapWidth
+            case .split(let splitWidth):
+                xOffset += splitWidth
+            }
+        }
+
+        // Fallback: position at the right edge
+        return containerWidth - deviceLayout.alphaKeyWidth
+    }
+
+    @objc private func handleDismissButton() {
+        dismissKeyboard()
     }
 
     private func rebuildKeyboard() {
