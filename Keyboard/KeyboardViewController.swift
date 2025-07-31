@@ -746,41 +746,20 @@ class KeyboardViewController: UIInputViewController {
 
 
     private func handleKeyTouchDown(_ keyData: KeyData) {
+        updateKeyVisualState(keyData, pressed: true)
+
         let isLargeScreen = view.bounds.width > largeScreenWidth
-
-        // Update the key's visual state and trigger redraw
-        if let index = keyboardTouchView.keyData.firstIndex(where: { $0.frame == keyData.frame }) {
-            keyboardTouchView.keyData[index] = KeyData(
-                keyType: keyData.keyType,
-                frame: keyData.frame,
-                originalColor: keyData.tappedColor,
-                tappedColor: keyData.tappedColor
-            )
-        }
-
-        // Show popout for simple character keys on smaller screens only
         if case .simple = keyData.keyType, !isLargeScreen {
             keyboardTouchView.keysWithPopouts.insert(keyData.frame)
             showKeyPopout(for: keyData)
         }
-
-        keyboardTouchView.setNeedsDisplay()
     }
 
     private func handleKeyTouchUp(_ keyData: KeyData) {
-        // Restore original color and trigger redraw
-        if let index = keyboardTouchView.keyData.firstIndex(where: { $0.frame == keyData.frame }) {
-            keyboardTouchView.keyData[index] = KeyData(
-                keyType: keyData.keyType,
-                frame: keyData.frame,
-                originalColor: keyData.originalColor,
-                tappedColor: keyData.tappedColor
-            )
-        }
+        updateKeyVisualState(keyData, pressed: false)
 
         keyboardTouchView.keysWithPopouts.remove(keyData.frame)
         hideKeyPopout(for: keyData)
-        keyboardTouchView.setNeedsDisplay()
 
         // Handle the key tap
         keyData.keyType.didTap(textDocumentProxy: textDocumentProxy,
@@ -801,6 +780,18 @@ class KeyboardViewController: UIInputViewController {
                               })
     }
 
+    private func updateKeyVisualState(_ keyData: KeyData, pressed: Bool) {
+        guard let index = keyboardTouchView.keyData.firstIndex(where: { $0.frame == keyData.frame }) else { return }
+
+        keyboardTouchView.keyData[index] = KeyData(
+            keyType: keyData.keyType,
+            frame: keyData.frame,
+            originalColor: pressed ? keyData.tappedColor : keyData.originalColor,
+            tappedColor: keyData.tappedColor
+        )
+
+        keyboardTouchView.setNeedsDisplay()
+    }
 
     private func toggleShift() {
         currentShifted.toggle()
