@@ -7,7 +7,7 @@
 
 import UIKit
 
-enum KeyboardLayout {
+enum KeyboardLayout: Equatable {
     case canary
     case qwerty
 

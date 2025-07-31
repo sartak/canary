@@ -7,7 +7,7 @@
 
 import UIKit
 
-enum Layer {
+enum Layer: Equatable {
     case alpha
     case symbol
     case number
@@ -35,7 +35,7 @@ struct KeyData {
     let frame: CGRect
 }
 
-enum KeyType {
+enum KeyType: Equatable {
     case simple(Character)
     case backspace
     case shift
