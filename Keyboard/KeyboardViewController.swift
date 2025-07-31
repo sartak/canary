@@ -16,8 +16,6 @@ struct DeviceLayout {
     let topPadding: CGFloat
     let bottomPadding: CGFloat
 
-    var specialKeyWidth: CGFloat { alphaKeyWidth * 1.5 + horizontalGap * 0.5 }
-    var spaceKeyWidth: CGFloat { alphaKeyWidth * 2 + horizontalGap }
 
     static func forCurrentDevice(containerWidth: CGFloat, containerHeight: CGFloat) -> DeviceLayout {
         // iPhone 16 Pro portrait baselines: 402pts width, 874pts height
@@ -31,7 +29,7 @@ struct DeviceLayout {
         let baseHorizontalGap: CGFloat = 6
         let baseVerticalGap: CGFloat = 12
         let baseKeyHeight: CGFloat = 36
-        let baseSplitWidth: CGFloat = 10
+        let baseSplitWidth: CGFloat = 16
         let baseTopPadding = baseVerticalGap
         let baseBottomPadding: CGFloat = 0
 
@@ -48,8 +46,8 @@ struct DeviceLayout {
         return layout
     }
 
-    func totalKeyboardHeight(for layer: Layer, shifted: Bool, layout: KeyboardLayout) -> CGFloat {
-        let numberOfRows = CGFloat(layout.rows(for: layer, shifted: shifted).count)
+    func totalKeyboardHeight(for layer: Layer, shifted: Bool, layout: KeyboardLayout, needsGlobe: Bool) -> CGFloat {
+        let numberOfRows = CGFloat(layout.rows(for: layer, shifted: shifted, needsGlobe: needsGlobe).count)
         // topPadding + rows + gaps between rows + bottomPadding
         return topPadding + (numberOfRows * keyHeight) + ((numberOfRows - 1) * verticalGap) + bottomPadding
     }
@@ -64,6 +62,17 @@ enum Layer {
 enum Node {
     case key(KeyType, CGFloat)
     case gap(CGFloat)
+    case split(CGFloat)
+
+    static func calculateRowWidth(for row: [Node]) -> CGFloat {
+        return row.reduce(0) { total, node in
+            switch node {
+            case .key(_, let width): return total + width
+            case .gap(let width): return total + width
+            case .split(let width): return total + width
+            }
+        }
+    }
 }
 
 enum KeyType {
@@ -74,6 +83,7 @@ enum KeyType {
     case space
     case layerSwitch(Layer)
     case layoutSwitch(KeyboardLayout)
+    case globe
     case empty
 
     func backgroundColor(shifted: Bool) -> UIColor {
@@ -82,7 +92,7 @@ enum KeyType {
             return UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0)
         case .shift:
             return shifted ? UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0) : UIColor(red: 63/255.0, green: 63/255.0, blue: 63/255.0, alpha: 1.0)
-        case .backspace, .enter, .layerSwitch, .layoutSwitch:
+        case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe:
             return UIColor(red: 63/255.0, green: 63/255.0, blue: 63/255.0, alpha: 1.0)
         case .empty:
             return UIColor.clear
@@ -118,6 +128,8 @@ enum KeyType {
             case .qwerty:
                 return "QWE"
             }
+        case .globe:
+            return "◉"
         case .empty:
             return ""
         }
@@ -129,6 +141,8 @@ enum KeyType {
             return 22
         case .backspace, .shift, .enter:
             return 16
+        case .globe:
+            return 12
         case .layerSwitch:
             let labelLength = self.label(shifted: false).count
             return labelLength > 1 ? 12 : 16
@@ -137,7 +151,7 @@ enum KeyType {
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void) {
         // Handle the key action
         switch self {
         case .simple(let char):
@@ -154,6 +168,8 @@ enum KeyType {
             layerSwitchHandler(layer)
         case .layoutSwitch(let layout):
             layoutSwitchHandler(layout)
+        case .globe:
+            globeHandler()
         case .empty:
             // Do nothing for empty keys
             break
@@ -163,7 +179,7 @@ enum KeyType {
         switch self {
         case .shift:
             break
-        case .simple, .backspace, .enter, .space, .layerSwitch, .layoutSwitch:
+        case .simple, .backspace, .enter, .space, .layerSwitch, .layoutSwitch, .globe:
             autoUnshiftHandler()
         case .empty:
             break
@@ -175,21 +191,47 @@ enum KeyboardLayout {
     case canary
     case qwerty
 
-    func rows(for layer: Layer, shifted: Bool) -> [[KeyType]] {
+    func rows(for layer: Layer, shifted: Bool, needsGlobe: Bool) -> [[KeyType]] {
         switch self {
         case .canary:
-            return canaryRows(for: layer, shifted: shifted)
+            let baseRows = canaryRows(for: layer, shifted: shifted)
+            if needsGlobe {
+                return baseRows
+            } else {
+                // Filter out globe key from all rows
+                return baseRows.map { row in
+                    row.filter { key in
+                        if case .globe = key {
+                            return false
+                        }
+                        return true
+                    }
+                }
+            }
         case .qwerty:
-            return qwertyRows(for: layer, shifted: shifted)
+            let baseRows = qwertyRows(for: layer, shifted: shifted)
+            if needsGlobe {
+                return baseRows
+            } else {
+                // Filter out globe key from all rows
+                return baseRows.map { row in
+                    row.filter { key in
+                        if case .globe = key {
+                            return false
+                        }
+                        return true
+                    }
+                }
+            }
         }
     }
 
-    func nodeRows(for layer: Layer, shifted: Bool, layout: DeviceLayout) -> [[Node]] {
+    func nodeRows(for layer: Layer, shifted: Bool, layout: DeviceLayout, needsGlobe: Bool) -> [[Node]] {
         switch self {
         case .canary:
-            return canaryNodeRows(for: layer, shifted: shifted, layout: layout)
+            return canaryNodeRows(for: layer, shifted: shifted, layout: layout, needsGlobe: needsGlobe)
         case .qwerty:
-            return qwertyNodeRows(for: layer, shifted: shifted, layout: layout)
+            return qwertyNodeRows(for: layer, shifted: shifted, layout: layout, needsGlobe: needsGlobe)
         }
     }
 
@@ -205,14 +247,14 @@ enum KeyboardLayout {
                     [.simple("W"), .simple("L"), .simple("Y"), .simple("P"), .simple("B"), .simple("Z"), .simple("F"), .simple("O"), .simple("U"), apostrophe],
                     [.simple("C"), .simple("R"), .simple("S"), .simple("T"), .simple("G"), .simple("M"), .simple("N"), .simple("E"), .simple("I"), .simple("A")],
                     [.simple("Q"), .simple("J"), .simple("V"), .simple("D"), .simple("K"), .simple("X"), .simple("H"), period, comma, .enter],
-                    [.layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
+                    [.globe, .layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
                 ]
             } else {
                 return [
                     [.simple("w"), .simple("l"), .simple("y"), .simple("p"), .simple("b"), .simple("z"), .simple("f"), .simple("o"), .simple("u"), apostrophe],
                     [.simple("c"), .simple("r"), .simple("s"), .simple("t"), .simple("g"), .simple("m"), .simple("n"), .simple("e"), .simple("i"), .simple("a")],
                     [.simple("q"), .simple("j"), .simple("v"), .simple("d"), .simple("k"), .simple("x"), .simple("h"), period, comma, .enter],
-                    [.layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
+                    [.globe, .layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
                 ]
             }
         case .symbol:
@@ -220,14 +262,14 @@ enum KeyboardLayout {
                 [.simple("`"), .simple("~"), .simple("\\"), .simple("{"), .simple("$"), .simple("%"), .simple("}"), .simple("/"), .simple("#"), apostrophe],
                 [.simple("&"), .simple("*"), .simple("="), .simple("("), .simple("<"), .simple(">"), .simple(")"), .simple("-"), .simple("+"), .simple("|")],
                 [.simple("—"), .simple("@"), .simple("_"), .simple("["), .simple("…"), .simple("^"), .simple("]"), period, comma, .enter],
-                [.layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.number)],
+                [.globe, .layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.number)],
             ]
         case .number:
             return [
                 [.empty, .simple("6"), .simple("5"), .simple("4"), .empty, .layoutSwitch(.qwerty), .empty, .empty, .empty, apostrophe],
                 [.empty, .simple("3"), .simple("2"), .simple("1"), .simple("0"), .empty, .empty, .empty, .empty, .empty],
                 [.empty, .simple("9"), .simple("8"), .simple("7"), .empty, .empty, .empty, period, comma, .enter],
-                [.layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.symbol)],
+                [.globe, .layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.symbol)],
             ]
         }
     }
@@ -244,14 +286,14 @@ enum KeyboardLayout {
                     [.simple("Q"), .simple("W"), .simple("E"), .simple("R"), .simple("T"), .simple("Y"), .simple("U"), .simple("I"), .simple("O"), .simple("P")],
                     [.simple("A"), .simple("S"), .simple("D"), .simple("F"), .simple("G"), .simple("H"), .simple("J"), .simple("K"), .simple("L")],
                     [.shift, .simple("Z"), .simple("X"), .simple("C"), .simple("V"), .simple("B"), .simple("N"), .simple("M"), .backspace],
-                    [.layerSwitch(.number), .layoutSwitch(.canary), .space, .enter],
+                    [.layerSwitch(.number), .layoutSwitch(.canary), .globe, .space, .enter],
                 ]
             } else {
                 return [
                     [.simple("q"), .simple("w"), .simple("e"), .simple("r"), .simple("t"), .simple("y"), .simple("u"), .simple("i"), .simple("o"), .simple("p")],
                     [.simple("a"), .simple("s"), .simple("d"), .simple("f"), .simple("g"), .simple("h"), .simple("j"), .simple("k"), .simple("l")],
                     [.shift, .simple("z"), .simple("x"), .simple("c"), .simple("v"), .simple("b"), .simple("n"), .simple("m"), .backspace],
-                    [.layerSwitch(.number), .layoutSwitch(.canary), .space, .enter],
+                    [.layerSwitch(.number), .layoutSwitch(.canary), .globe, .space, .enter],
                 ]
             }
         case .symbol:
@@ -259,20 +301,20 @@ enum KeyboardLayout {
                 [.simple("["), .simple("]"), .simple("{"), .simple("}"), .simple("#"), .simple("%"), .simple("^"), .simple("*"), .simple("+"), .simple("=")],
                 [.simple("_"), .simple("\\"), .simple("|"), .simple("~"), .simple("<"), .simple(">"), .simple("€"), .simple("£"), .simple("¥"), .simple("·")],
                 [.layerSwitch(.number), .simple("."), .simple(","), .simple("?"), .simple("!"), .simple("'"), .backspace],
-                [.layerSwitch(.alpha), .layoutSwitch(.canary), .space, .enter],
+                [.layerSwitch(.alpha), .layoutSwitch(.canary), .globe, .space, .enter],
             ]
         case .number:
             return [
                 [.simple("1"), .simple("2"), .simple("3"), .simple("4"), .simple("5"), .simple("6"), .simple("7"), .simple("8"), .simple("9"), .simple("0")],
                 [.simple("-"), .simple("/"), .simple(":"), .simple(";"), .simple("("), .simple(")"), .simple("$"), .simple("&"), .simple("@"), .simple("\"")],
                 [.layerSwitch(.symbol), .simple("."), .simple(","), .simple("?"), .simple("!"), .simple("'"), .backspace],
-                [.layerSwitch(.alpha), .layoutSwitch(.canary), .space, .enter],
+                [.layerSwitch(.alpha), .layoutSwitch(.canary), .globe, .space, .enter],
             ]
         }
     }
 
-    private func canaryNodeRows(for layer: Layer, shifted: Bool, layout: DeviceLayout) -> [[Node]] {
-        let keyRows = canaryRows(for: layer, shifted: shifted)
+    private func canaryNodeRows(for layer: Layer, shifted: Bool, layout: DeviceLayout, needsGlobe: Bool) -> [[Node]] {
+        let keyRows = self.rows(for: layer, shifted: shifted, needsGlobe: needsGlobe)
         let allNodeRows = keyRows.enumerated().map { rowIndex, row in
             var nodeRow: [Node] = []
 
@@ -281,30 +323,57 @@ enum KeyboardLayout {
                 let keyWidth: CGFloat
                 switch keyType {
                 case .space:
-                    keyWidth = layout.spaceKeyWidth
+                    keyWidth = layout.alphaKeyWidth * 2 + layout.horizontalGap
                 case .layerSwitch, .shift, .backspace:
-                    keyWidth = layout.specialKeyWidth
-                case .simple, .enter, .layoutSwitch, .empty:
+                    // Make special keys narrower when globe key is present
+                    keyWidth = needsGlobe ? layout.alphaKeyWidth * 1.3 : (layout.alphaKeyWidth * 1.5 + layout.horizontalGap * 0.5)
+                case .simple, .enter, .layoutSwitch, .globe, .empty:
                     keyWidth = layout.alphaKeyWidth
                 }
                 nodeRow.append(.key(keyType, keyWidth))
 
-                // Add gap after key (except last key)
-                if keyIndex < row.count - 1 {
-                    nodeRow.append(.gap(layout.horizontalGap))
+                // Add split gap in middle
+                let splitAfterIndex: Int
+                if rowIndex == 3 {
+                    // Bottom row: split after backspace (index 3 with globe, index 2 without globe)
+                    splitAfterIndex = needsGlobe ? 3 : 2
+                } else {
+                    splitAfterIndex = (row.count / 2) - 1
                 }
 
-                // Add split gap in middle
-                let splitAfterIndex = (row.count / 2) - 1
                 if keyIndex == splitAfterIndex {
-                    nodeRow.append(.gap(layout.splitWidth))
+                    nodeRow.append(.split(layout.splitWidth))
+                } else if keyIndex < row.count - 1 {
+                    // Add gap after key (except last key and before split)
+                    nodeRow.append(.gap(layout.horizontalGap))
                 }
             }
 
             return nodeRow
         }
 
-        return allNodeRows
+        // Align bottom row split with first row
+        return allNodeRows.enumerated().map { rowIndex, nodeRow in
+            if rowIndex == 3 {
+                // Find split positions in both rows
+                let firstRowSplitIndex = allNodeRows[0].firstIndex { if case .split = $0 { return true } else { return false } }!
+                let bottomRowSplitIndex = nodeRow.firstIndex { if case .split = $0 { return true } else { return false } }!
+
+                // Calculate left and right side widths using split as delimiter
+                let firstRowLeftWidth = Node.calculateRowWidth(for: Array(allNodeRows[0].prefix(firstRowSplitIndex)))
+                let firstRowRightWidth = Node.calculateRowWidth(for: Array(allNodeRows[0].suffix(from: firstRowSplitIndex + 1)))
+
+                let bottomRowLeftWidth = Node.calculateRowWidth(for: Array(nodeRow.prefix(bottomRowSplitIndex)))
+                let bottomRowRightWidth = Node.calculateRowWidth(for: Array(nodeRow.suffix(from: bottomRowSplitIndex + 1)))
+
+                let leftGap = firstRowLeftWidth - bottomRowLeftWidth
+                let rightGap = firstRowRightWidth - bottomRowRightWidth
+
+
+                return [.gap(max(0, leftGap))] + nodeRow + [.gap(max(0, rightGap))]
+            }
+            return nodeRow
+        }
     }
 
     private func qwertySpecialKeyWidth(_ layout: DeviceLayout) -> CGFloat {
@@ -315,53 +384,54 @@ enum KeyboardLayout {
         return round(layout.alphaKeyWidth * 1.4)
     }
 
-    private func qwertyStandardRowWidth(_ layout: DeviceLayout) -> CGFloat {
-        let firstRow = qwertyRows(for: .alpha, shifted: false)[0]
+    private func qwertyStandardRowWidth(_ layout: DeviceLayout, needsGlobe: Bool) -> CGFloat {
+        let firstRow = KeyboardLayout.qwerty.rows(for: .alpha, shifted: false, needsGlobe: needsGlobe)[0]
         return layout.alphaKeyWidth * CGFloat(firstRow.count) + layout.horizontalGap * CGFloat(firstRow.count - 1)
     }
 
-    private func qwertyThirdRowSpecialGap(layer: Layer, _ layout: DeviceLayout) -> CGFloat {
-        let thirdRow = qwertyRows(for: layer, shifted: false)[2]
+    private func qwertyThirdRowSpecialGap(layer: Layer, _ layout: DeviceLayout, needsGlobe: Bool) -> CGFloat {
+        let thirdRow = KeyboardLayout.qwerty.rows(for: layer, shifted: false, needsGlobe: needsGlobe)[2]
         let specialKeyWidth = qwertySpecialKeyWidth(layout)
         let simpleKeyWidth = (layer == .number || layer == .symbol) ? qwertyThirdRowSimpleKeyWidth(layout) : layout.alphaKeyWidth
         let middleKeysWidth = CGFloat(thirdRow.count - 2) * simpleKeyWidth + CGFloat(thirdRow.count - 3) * layout.horizontalGap
-        let availableWidth = qwertyStandardRowWidth(layout)
+        let availableWidth = qwertyStandardRowWidth(layout, needsGlobe: needsGlobe)
         let totalSpecialWidth = specialKeyWidth * 2
         let totalGapWidth = availableWidth - totalSpecialWidth - middleKeysWidth
         return totalGapWidth / 2
     }
 
-    private func qwertyEnterKeyWidth(_ layout: DeviceLayout) -> CGFloat {
+    private func qwertyEnterKeyWidth(_ layout: DeviceLayout, needsGlobe: Bool) -> CGFloat {
         let specialKeyWidth = qwertySpecialKeyWidth(layout)
-        let specialGap = qwertyThirdRowSpecialGap(layer: .alpha, layout)
+        let specialGap = qwertyThirdRowSpecialGap(layer: .alpha, layout, needsGlobe: needsGlobe)
         return layout.alphaKeyWidth + specialKeyWidth + specialGap
     }
 
-    private func qwertySpaceKeyWidth(_ layout: DeviceLayout) -> CGFloat {
-        let bottomRow = qwertyRows(for: .alpha, shifted: false)[3]
-        let availableWidth = qwertyStandardRowWidth(layout)
-        let specialKeyWidth = qwertySpecialKeyWidth(layout)
-        let enterKeyWidth = qwertyEnterKeyWidth(layout)
-        let specialKeysCount = bottomRow.filter { keyType in
-            switch keyType {
-            case .layerSwitch, .layoutSwitch: return true
-            default: return false
+    private func qwertySpaceKeyWidth(_ layout: DeviceLayout, needsGlobe: Bool) -> CGFloat {
+        let bottomRow = KeyboardLayout.qwerty.rows(for: .alpha, shifted: false, needsGlobe: needsGlobe)[3]
+        let availableWidth = qwertyStandardRowWidth(layout, needsGlobe: needsGlobe)
+
+        let otherKeysWidth: CGFloat = bottomRow.compactMap { keyType -> CGFloat? in
+            if case .space = keyType {
+                return nil
             }
-        }.count
-        let otherKeysWidth = specialKeyWidth * CGFloat(specialKeysCount) + enterKeyWidth
+            return qwertyKeyWidth(for: keyType, rowIndex: 3, layer: .alpha, layout: layout, needsGlobe: needsGlobe)
+        }.reduce(0.0, +)
+
         let gapsWidth = layout.horizontalGap * CGFloat(bottomRow.count - 1)
-        return availableWidth - otherKeysWidth - gapsWidth
+        let spaceWidth = availableWidth - otherKeysWidth - gapsWidth
+
+        return spaceWidth
     }
 
-    private func qwertyKeyWidth(for keyType: KeyType, rowIndex: Int, layer: Layer, layout: DeviceLayout) -> CGFloat {
+    private func qwertyKeyWidth(for keyType: KeyType, rowIndex: Int, layer: Layer, layout: DeviceLayout, needsGlobe: Bool) -> CGFloat {
         switch keyType {
         case .space:
-            return qwertySpaceKeyWidth(layout)
+            return qwertySpaceKeyWidth(layout, needsGlobe: needsGlobe)
         case .enter:
-            return qwertyEnterKeyWidth(layout)
+            return qwertyEnterKeyWidth(layout, needsGlobe: needsGlobe)
         case .layerSwitch, .shift, .backspace, .layoutSwitch:
             return qwertySpecialKeyWidth(layout)
-        case .simple, .empty:
+        case .simple, .globe, .empty:
             // Third row simple keys are 40% larger on number/symbol layers
             if rowIndex == 2 && (layer == .number || layer == .symbol) {
                 return qwertyThirdRowSimpleKeyWidth(layout)
@@ -371,20 +441,20 @@ enum KeyboardLayout {
         }
     }
 
-    private func qwertyNodeRows(for layer: Layer, shifted: Bool, layout: DeviceLayout) -> [[Node]] {
-        let keyRows = qwertyRows(for: layer, shifted: shifted)
+    private func qwertyNodeRows(for layer: Layer, shifted: Bool, layout: DeviceLayout, needsGlobe: Bool) -> [[Node]] {
+        let keyRows = self.rows(for: layer, shifted: shifted, needsGlobe: needsGlobe)
         return keyRows.enumerated().map { rowIndex, row in
             var nodeRow: [Node] = []
 
             for (keyIndex, keyType) in row.enumerated() {
                 // Add the key with QWERTY-specific sizing
-                let keyWidth = qwertyKeyWidth(for: keyType, rowIndex: rowIndex, layer: layer, layout: layout)
+                let keyWidth = qwertyKeyWidth(for: keyType, rowIndex: rowIndex, layer: layer, layout: layout, needsGlobe: needsGlobe)
                 nodeRow.append(.key(keyType, keyWidth))
 
                 // Add gap after key (except last key)
                 if keyIndex < row.count - 1 {
                     let gapWidth = if rowIndex == 2 && (keyIndex == 0 || keyIndex == row.count - 2) {
-                        qwertyThirdRowSpecialGap(layer: layer, layout)
+                        qwertyThirdRowSpecialGap(layer: layer, layout, needsGlobe: false)
                     } else {
                         layout.horizontalGap
                     }
@@ -404,9 +474,11 @@ class KeyboardViewController: UIInputViewController {
     private var deviceLayout: DeviceLayout!
     private var heightConstraint: NSLayoutConstraint?
     private var keyboardLayout: KeyboardLayout = .canary
+    private var needsGlobe: Bool = false
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        needsGlobe = needsInputModeSwitchKey
         setupKeyboard()
     }
 
@@ -439,7 +511,7 @@ class KeyboardViewController: UIInputViewController {
         ])
 
         // Set explicit height constraint for the main view
-        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: currentShifted, layout: keyboardLayout)
+        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: currentShifted, layout: keyboardLayout, needsGlobe: needsGlobe)
         heightConstraint = NSLayoutConstraint(
             item: view,
             attribute: .height,
@@ -458,7 +530,7 @@ class KeyboardViewController: UIInputViewController {
 
         var yOffset: CGFloat = deviceLayout.topPadding
 
-        for (rowIndex, row) in keyboardLayout.nodeRows(for: currentLayer, shifted: currentShifted, layout: deviceLayout).enumerated() {
+        for (rowIndex, row) in keyboardLayout.nodeRows(for: currentLayer, shifted: currentShifted, layout: deviceLayout, needsGlobe: needsGlobe).enumerated() {
             createRowKeys(for: row, rowIndex: rowIndex, yOffset: yOffset, in: containerView)
             yOffset += deviceLayout.keyHeight + deviceLayout.verticalGap
         }
@@ -468,7 +540,7 @@ class KeyboardViewController: UIInputViewController {
 
     private func createRowKeys(for row: [Node], rowIndex: Int, yOffset: CGFloat, in containerView: UIView) {
         let containerWidth = view.bounds.width
-        let rowWidth = calculateRowWidth(for: row)
+        let rowWidth = Node.calculateRowWidth(for: row)
         let rowStartX = (containerWidth - rowWidth) / 2
         var xOffset: CGFloat = rowStartX
 
@@ -481,25 +553,13 @@ class KeyboardViewController: UIInputViewController {
                 xOffset += keyWidth
             case .gap(let gapWidth):
                 xOffset += gapWidth
+            case .split(let splitWidth):
+                xOffset += splitWidth
             }
         }
     }
 
 
-    private func calculateRowWidth(for row: [Node]) -> CGFloat {
-        var totalWidth: CGFloat = 0
-
-        for node in row {
-            switch node {
-            case .key(_, let keyWidth):
-                totalWidth += keyWidth
-            case .gap(let gapWidth):
-                totalWidth += gapWidth
-            }
-        }
-
-        return totalWidth
-    }
 
 
 
@@ -534,6 +594,9 @@ class KeyboardViewController: UIInputViewController {
                       },
                       autoUnshiftHandler: { [weak self] in
                           self?.autoUnshift()
+                      },
+                      globeHandler: { [weak self] in
+                          self?.advanceToNextInputMode()
                       })
     }
 
