@@ -30,7 +30,7 @@ struct DeviceLayout {
         let baseKeyHeight: CGFloat = 36
         let baseSplitWidth: CGFloat = 16
         let baseTopPadding: CGFloat = 48
-        let baseBottomPadding: CGFloat = 0
+        let baseBottomPadding: CGFloat = baseVerticalGap / 2
 
         let layout = DeviceLayout(
             alphaKeyWidth: baseAlphaKeyWidth * widthScale,

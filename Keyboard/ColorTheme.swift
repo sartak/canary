@@ -45,7 +45,7 @@ enum ColorTheme {
             return .black
         }
     }
-    
+
     var shadowColor: UIColor {
         switch self {
         case .dark:
@@ -53,5 +53,22 @@ enum ColorTheme {
         case .light:
             return UIColor.black.withAlphaComponent(0.1)
         }
+    }
+
+    var keyShadowColor: UIColor {
+        switch self {
+        case .dark:
+            return UIColor.black.withAlphaComponent(0.4)
+        case .light:
+            return UIColor.black.withAlphaComponent(0.25)
+        }
+    }
+
+    var keyShadowOffset: CGSize {
+        return CGSize(width: 0, height: 2)
+    }
+
+    var keyShadowRadius: CGFloat {
+        return 0.5
     }
 }

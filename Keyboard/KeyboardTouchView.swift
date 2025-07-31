@@ -103,10 +103,24 @@ class KeyboardTouchView: UIView {
 
         let isLargeScreen = bounds.width > largeScreenWidth
 
+        let theme = ColorTheme.current(for: self.traitCollection)
+        
         for key in keyData {
+            let isPressed = pressedKeys.contains(key.index)
+            
+            // Draw key shadow (only for visible keys, not when pressed)
+            if !isPressed && key.keyType != .empty {
+                let shadowPath = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
+                let context = UIGraphicsGetCurrentContext()
+                context?.saveGState()
+                context?.setShadow(offset: theme.keyShadowOffset, blur: theme.keyShadowRadius, color: theme.keyShadowColor.cgColor)
+                theme.keyShadowColor.setFill()
+                shadowPath.fill()
+                context?.restoreGState()
+            }
+
             // Draw rounded key background
             let path = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
-            let isPressed = pressedKeys.contains(key.index)
             let color = if isPressed {
                 key.keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen, traitCollection: self.traitCollection)
             } else {
@@ -124,7 +138,7 @@ class KeyboardTouchView: UIView {
                     let font = UIFont.systemFont(ofSize: fontSize)
                     let attributes: [NSAttributedString.Key: Any] = [
                         .font: font,
-                        .foregroundColor: ColorTheme.current(for: self.traitCollection).textColor
+                        .foregroundColor: theme.textColor
                     ]
 
                     let textSize = text.size(withAttributes: attributes)
