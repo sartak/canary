@@ -27,6 +27,11 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             gestureRecognizer?.onKeyTouchUp = onKeyTouchUp
         }
     }
+    var onKeyLongPress: ((KeyData) -> Void)? {
+        didSet {
+            gestureRecognizer?.onKeyLongPress = onKeyLongPress
+        }
+    }
 
     // Multi-touch gesture recognizer
     private var gestureRecognizer: MultiTouchKeyboardGestureRecognizer!

@@ -11,10 +11,16 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
     var keyData: [KeyData] = []
     var onKeyTouchDown: ((KeyData) -> Void)?
     var onKeyTouchUp: ((KeyData) -> Void)?
+    var onKeyLongPress: ((KeyData) -> Void)?
 
     // Multi-touch support - same as original implementation
     private var touchQueue: [(UITouch, KeyData)] = []
     private var pressedKeys: Set<Int> = []
+
+    // Long press support
+    private var longPressTimers: [UITouch: Timer] = [:]
+    private var longPressTriggered: Set<UITouch> = []
+    private let longPressDelay: TimeInterval = 0.5
 
     var pressedKeyIndices: Set<Int> {
         return pressedKeys
@@ -42,6 +48,9 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
                 touchQueue.append((touch, key))
                 pressedKeys.insert(key.index)
                 onKeyTouchDown?(key)
+
+                // Start long press timer
+                startLongPressTimer(for: touch, key: key)
             }
         }
 
@@ -53,6 +62,7 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
         super.touchesEnded(touches, with: event)
 
         for touch in touches {
+            cancelLongPressTimer(for: touch)
             processQueueUpToTouch(touch)
         }
 
@@ -68,6 +78,7 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
         super.touchesCancelled(touches, with: event)
 
         for touch in touches {
+            cancelLongPressTimer(for: touch)
             processQueueUpToTouch(touch)
         }
 
@@ -98,5 +109,34 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
         super.reset()
         touchQueue.removeAll()
         pressedKeys.removeAll()
+        cancelAllLongPressTimers()
+    }
+
+    // MARK: - Long Press Support
+
+    private func startLongPressTimer(for touch: UITouch, key: KeyData) {
+        let timer = Timer.scheduledTimer(withTimeInterval: longPressDelay, repeats: false) { [weak self] _ in
+            self?.handleLongPress(for: touch, key: key)
+        }
+        longPressTimers[touch] = timer
+    }
+
+    private func cancelLongPressTimer(for touch: UITouch) {
+        longPressTimers[touch]?.invalidate()
+        longPressTimers.removeValue(forKey: touch)
+        longPressTriggered.remove(touch)
+    }
+
+    private func cancelAllLongPressTimers() {
+        for timer in longPressTimers.values {
+            timer.invalidate()
+        }
+        longPressTimers.removeAll()
+        longPressTriggered.removeAll()
+    }
+
+    private func handleLongPress(for touch: UITouch, key: KeyData) {
+        longPressTriggered.insert(touch)
+        onKeyLongPress?(key)
     }
 }

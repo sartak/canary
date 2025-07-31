@@ -20,6 +20,12 @@ class KeyboardViewController: UIInputViewController {
     private var keyPopouts: [Int: UIView] = [:]
     private var dismissButton: UIButton!
 
+    // Key repeat support
+    private var keyRepeatTimer: Timer?
+    private var currentlyRepeatingKey: KeyData?
+    private let keyRepeatInitialDelay: TimeInterval = 0.5
+    private let keyRepeatInterval: TimeInterval = 0.05
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         needsGlobe = needsInputModeSwitchKey
@@ -55,6 +61,10 @@ class KeyboardViewController: UIInputViewController {
 
         keyboardTouchView.onKeyTouchUp = { [weak self] keyData in
             self?.handleKeyTouchUp(keyData)
+        }
+
+        keyboardTouchView.onKeyLongPress = { [weak self] keyData in
+            self?.handleKeyLongPress(keyData)
         }
 
         // Calculate keyboard height first
@@ -151,7 +161,56 @@ class KeyboardViewController: UIInputViewController {
         keyboardTouchView.keysWithPopouts.remove(keyData.index)
         hideKeyPopout(for: keyData)
 
-        // Handle the key tap
+        // Stop key repeat if this key was repeating
+        stopKeyRepeat()
+
+        // Handle the key tap (only if it wasn't a long press that triggered repeat)
+        if currentlyRepeatingKey == nil || currentlyRepeatingKey?.index != keyData.index {
+            keyData.keyType.didTap(textDocumentProxy: textDocumentProxy,
+                                  layerSwitchHandler: { [weak self] newLayer in
+                                      self?.switchToLayer(newLayer)
+                                  },
+                                  layoutSwitchHandler: { [weak self] newLayout in
+                                      self?.switchToLayout(newLayout)
+                                  },
+                                  shiftHandler: { [weak self] in
+                                      self?.toggleShift()
+                                  },
+                                  autoUnshiftHandler: { [weak self] in
+                                      self?.autoUnshift()
+                                  },
+                                  globeHandler: { [weak self] in
+                                      self?.advanceToNextInputMode()
+                                  })
+        }
+    }
+
+    private func handleKeyLongPress(_ keyData: KeyData) {
+        // Only start key repeat for backspace
+        if case .backspace = keyData.keyType {
+            startKeyRepeat(for: keyData)
+        }
+    }
+
+    private func startKeyRepeat(for keyData: KeyData) {
+        currentlyRepeatingKey = keyData
+
+        // Perform the first repeat immediately
+        performKeyAction(keyData)
+
+        // Start the repeating timer
+        keyRepeatTimer = Timer.scheduledTimer(withTimeInterval: keyRepeatInterval, repeats: true) { [weak self] _ in
+            self?.performKeyAction(keyData)
+        }
+    }
+
+    private func stopKeyRepeat() {
+        keyRepeatTimer?.invalidate()
+        keyRepeatTimer = nil
+        currentlyRepeatingKey = nil
+    }
+
+    private func performKeyAction(_ keyData: KeyData) {
         keyData.keyType.didTap(textDocumentProxy: textDocumentProxy,
                               layerSwitchHandler: { [weak self] newLayer in
                                   self?.switchToLayer(newLayer)
@@ -168,6 +227,9 @@ class KeyboardViewController: UIInputViewController {
                               globeHandler: { [weak self] in
                                   self?.advanceToNextInputMode()
                               })
+
+        // Provide haptic feedback for each repeat
+        HapticFeedback.shared.keyPress(for: keyData.keyType, hasFullAccess: hasFullAccess)
     }
 
     private func toggleShift() {
@@ -252,6 +314,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func rebuildKeyboard() {
+        stopKeyRepeat()
         view.subviews.forEach { $0.removeFromSuperview() }
         keyPopouts.removeAll()
         setupKeyboard()
