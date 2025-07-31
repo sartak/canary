@@ -502,6 +502,42 @@ class KeyboardTouchView: UIView {
     var onKeyTouchDown: ((KeyData) -> Void)?
     var onKeyTouchUp: ((KeyData) -> Void)?
 
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupTouchHandling()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupTouchHandling()
+    }
+
+    private func setupTouchHandling() {
+        // Disable system gesture recognizer delays that cause edge touch issues
+        DispatchQueue.main.async { [weak self] in
+            self?.disableSystemGestureDelays()
+        }
+    }
+
+    private func disableSystemGestureDelays() {
+        // Find the window and disable delaysTouchesBegan on system gesture recognizers
+        guard let window = self.superview?.window ?? self.window else {
+            // If we don't have a window yet, try again later
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.disableSystemGestureDelays()
+            }
+            return
+        }
+
+        if let gestureRecognizers = window.gestureRecognizers {
+            for recognizer in gestureRecognizers {
+                if recognizer.delaysTouchesBegan {
+                    recognizer.delaysTouchesBegan = false
+                }
+            }
+        }
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
