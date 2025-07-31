@@ -62,8 +62,6 @@ struct KeyData {
     let index: Int
     let keyType: KeyType
     let frame: CGRect
-    let originalColor: UIColor
-    let tappedColor: UIColor
 }
 
 enum Layer {
@@ -505,6 +503,7 @@ class KeyboardTouchView: UIView {
     // Multi-touch support
     private var activeTouches: [UITouch: KeyData] = [:]
     private var touchQueue: [UITouch] = []
+    private var pressedKeys: Set<Int> = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -552,6 +551,7 @@ class KeyboardTouchView: UIView {
             if let key = keyData.first(where: { $0.frame.contains(location) }) {
                 activeTouches[touch] = key
                 touchQueue.append(touch)
+                pressedKeys.insert(key.index)
                 onKeyTouchDown?(key)
             }
         }
@@ -583,6 +583,7 @@ class KeyboardTouchView: UIView {
             if let key = activeTouches[touch] {
                 onKeyTouchUp?(key)
                 activeTouches.removeValue(forKey: touch)
+                pressedKeys.remove(key.index)
             }
         }
 
@@ -593,10 +594,18 @@ class KeyboardTouchView: UIView {
     override func draw(_ rect: CGRect) {
         super.draw(rect)
 
+        let isLargeScreen = bounds.width > largeScreenWidth
+
         for key in keyData {
             // Draw rounded key background
             let path = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
-            key.originalColor.setFill()
+            let isPressed = pressedKeys.contains(key.index)
+            let color = if isPressed {
+                key.keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen)
+            } else {
+                key.keyType.backgroundColor(shifted: currentShifted)
+            }
+            color.setFill()
             path.fill()
 
             // Draw key text (hide text if this key has a popout showing)
@@ -728,9 +737,7 @@ class KeyboardViewController: UIInputViewController {
                 let keyData = KeyData(
                     index: startingIndex + keys.count,
                     keyType: keyType,
-                    frame: frame,
-                    originalColor: keyType.backgroundColor(shifted: currentShifted),
-                    tappedColor: keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen)
+                    frame: frame
                 )
                 keys.append(keyData)
                 xOffset += keyWidth
@@ -749,7 +756,7 @@ class KeyboardViewController: UIInputViewController {
 
 
     private func handleKeyTouchDown(_ keyData: KeyData) {
-        updateKeyVisualState(keyData, pressed: true)
+        keyboardTouchView.setNeedsDisplay()
 
         let isLargeScreen = view.bounds.width > largeScreenWidth
         if case .simple = keyData.keyType, !isLargeScreen {
@@ -759,7 +766,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func handleKeyTouchUp(_ keyData: KeyData) {
-        updateKeyVisualState(keyData, pressed: false)
+        keyboardTouchView.setNeedsDisplay()
 
         keyboardTouchView.keysWithPopouts.remove(keyData.index)
         hideKeyPopout(for: keyData)
@@ -781,20 +788,6 @@ class KeyboardViewController: UIInputViewController {
                               globeHandler: { [weak self] in
                                   self?.advanceToNextInputMode()
                               })
-    }
-
-    private func updateKeyVisualState(_ keyData: KeyData, pressed: Bool) {
-        guard keyData.index < keyboardTouchView.keyData.count else { return }
-
-        keyboardTouchView.keyData[keyData.index] = KeyData(
-            index: keyData.index,
-            keyType: keyData.keyType,
-            frame: keyData.frame,
-            originalColor: pressed ? keyData.tappedColor : keyData.originalColor,
-            tappedColor: keyData.tappedColor
-        )
-
-        keyboardTouchView.setNeedsDisplay()
     }
 
     private func toggleShift() {
