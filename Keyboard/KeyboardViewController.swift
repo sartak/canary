@@ -59,6 +59,7 @@ struct DeviceLayout {
 }
 
 struct KeyData {
+    let index: Int
     let keyType: KeyType
     let frame: CGRect
     let originalColor: UIColor
@@ -497,7 +498,7 @@ enum KeyboardLayout {
 class KeyboardTouchView: UIView {
     var keyData: [KeyData] = []
     var currentShifted: Bool = false
-    var keysWithPopouts: Set<CGRect> = []
+    var keysWithPopouts: Set<Int> = []
     var onKeyTouchDown: ((KeyData) -> Void)?
     var onKeyTouchUp: ((KeyData) -> Void)?
 
@@ -599,7 +600,7 @@ class KeyboardTouchView: UIView {
             path.fill()
 
             // Draw key text (hide text if this key has a popout showing)
-            let shouldHideText = keysWithPopouts.contains(key.frame)
+            let shouldHideText = keysWithPopouts.contains(key.index)
             if !shouldHideText {
                 let text = key.keyType.label(shifted: currentShifted)
                 if !text.isEmpty {
@@ -633,7 +634,7 @@ class KeyboardViewController: UIInputViewController {
     private var heightConstraint: NSLayoutConstraint?
     private var keyboardLayout: KeyboardLayout = .canary
     private var needsGlobe: Bool = false
-    private var keyPopouts: [CGRect: UIView] = [:]
+    private var keyPopouts: [Int: UIView] = [:]
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -704,14 +705,15 @@ class KeyboardViewController: UIInputViewController {
         var yOffset: CGFloat = deviceLayout.topPadding
 
         for (rowIndex, row) in keyboardLayout.nodeRows(for: currentLayer, shifted: currentShifted, layout: deviceLayout, needsGlobe: needsGlobe).enumerated() {
-            keys.append(contentsOf: createRowKeyData(for: row, rowIndex: rowIndex, yOffset: yOffset))
+            let rowKeys = createRowKeyData(for: row, rowIndex: rowIndex, yOffset: yOffset, startingIndex: keys.count)
+            keys.append(contentsOf: rowKeys)
             yOffset += deviceLayout.keyHeight + deviceLayout.verticalGap
         }
 
         return keys
     }
 
-    private func createRowKeyData(for row: [Node], rowIndex: Int, yOffset: CGFloat) -> [KeyData] {
+    private func createRowKeyData(for row: [Node], rowIndex: Int, yOffset: CGFloat, startingIndex: Int) -> [KeyData] {
         let containerWidth = view.bounds.width
         let rowWidth = Node.calculateRowWidth(for: row)
         let rowStartX = (containerWidth - rowWidth) / 2
@@ -724,6 +726,7 @@ class KeyboardViewController: UIInputViewController {
                 let frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: deviceLayout.keyHeight)
                 let isLargeScreen = view.bounds.width > largeScreenWidth
                 let keyData = KeyData(
+                    index: startingIndex + keys.count,
                     keyType: keyType,
                     frame: frame,
                     originalColor: keyType.backgroundColor(shifted: currentShifted),
@@ -750,7 +753,7 @@ class KeyboardViewController: UIInputViewController {
 
         let isLargeScreen = view.bounds.width > largeScreenWidth
         if case .simple = keyData.keyType, !isLargeScreen {
-            keyboardTouchView.keysWithPopouts.insert(keyData.frame)
+            keyboardTouchView.keysWithPopouts.insert(keyData.index)
             showKeyPopout(for: keyData)
         }
     }
@@ -758,7 +761,7 @@ class KeyboardViewController: UIInputViewController {
     private func handleKeyTouchUp(_ keyData: KeyData) {
         updateKeyVisualState(keyData, pressed: false)
 
-        keyboardTouchView.keysWithPopouts.remove(keyData.frame)
+        keyboardTouchView.keysWithPopouts.remove(keyData.index)
         hideKeyPopout(for: keyData)
 
         // Handle the key tap
@@ -781,9 +784,10 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func updateKeyVisualState(_ keyData: KeyData, pressed: Bool) {
-        guard let index = keyboardTouchView.keyData.firstIndex(where: { $0.frame == keyData.frame }) else { return }
+        guard keyData.index < keyboardTouchView.keyData.count else { return }
 
-        keyboardTouchView.keyData[index] = KeyData(
+        keyboardTouchView.keyData[keyData.index] = KeyData(
+            index: keyData.index,
             keyType: keyData.keyType,
             frame: keyData.frame,
             originalColor: pressed ? keyData.tappedColor : keyData.originalColor,
@@ -906,7 +910,7 @@ class KeyboardViewController: UIInputViewController {
         ])
 
         view.addSubview(popout)
-        keyPopouts[keyData.frame] = popout
+        keyPopouts[keyData.index] = popout
 
         // Position popout above the key (always centered)
         let keyCenter = CGPoint(x: keyData.frame.midX, y: keyData.frame.midY)
@@ -921,8 +925,8 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func hideKeyPopout(for keyData: KeyData) {
-        guard let popout = keyPopouts[keyData.frame] else { return }
+        guard let popout = keyPopouts[keyData.index] else { return }
         popout.removeFromSuperview()
-        keyPopouts.removeValue(forKey: keyData.frame)
+        keyPopouts.removeValue(forKey: keyData.index)
     }
 }
