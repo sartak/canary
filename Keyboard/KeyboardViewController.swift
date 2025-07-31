@@ -7,6 +7,9 @@
 
 import UIKit
 
+private let primaryKeyColor = UIColor(white: 115/255.0, alpha: 1.0)
+private let secondaryKeyColor = UIColor(white: 63/255.0, alpha: 1.0)
+
 struct DeviceLayout {
     let alphaKeyWidth: CGFloat
     let horizontalGap: CGFloat
@@ -89,11 +92,24 @@ enum KeyType {
     func backgroundColor(shifted: Bool) -> UIColor {
         switch self {
         case .simple, .space:
-            return UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0)
+            return primaryKeyColor
         case .shift:
-            return shifted ? UIColor(red: 115/255.0, green: 115/255.0, blue: 115/255.0, alpha: 1.0) : UIColor(red: 63/255.0, green: 63/255.0, blue: 63/255.0, alpha: 1.0)
+            return shifted ? primaryKeyColor : secondaryKeyColor
         case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe:
-            return UIColor(red: 63/255.0, green: 63/255.0, blue: 63/255.0, alpha: 1.0)
+            return secondaryKeyColor
+        case .empty:
+            return UIColor.clear
+        }
+    }
+
+    func tappedBackgroundColor(shifted: Bool) -> UIColor {
+        switch self {
+        case .simple, .space:
+            return secondaryKeyColor
+        case .shift:
+            return shifted ? secondaryKeyColor : primaryKeyColor
+        case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe:
+            return primaryKeyColor
         case .empty:
             return UIColor.clear
         }
@@ -564,7 +580,7 @@ class KeyboardViewController: UIInputViewController {
 
 
     private func createKeyButton(keyType: KeyType) -> UIButton {
-        let button = UIButton(type: .system)
+        let button = UIButton(type: .custom)
 
         let displayText = keyType.label(shifted: currentShifted)
         button.setTitle(displayText, for: .normal)
@@ -574,10 +590,22 @@ class KeyboardViewController: UIInputViewController {
         button.backgroundColor = keyType.backgroundColor(shifted: currentShifted)
         button.layer.cornerRadius = 5
 
+        button.addTarget(self, action: #selector(keyTouchDown(_:)), for: .touchDown)
+        button.addTarget(self, action: #selector(keyTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
         button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         keyTypeMap[button] = keyType
 
         return button
+    }
+
+    @objc private func keyTouchDown(_ sender: UIButton) {
+        guard let keyType = keyTypeMap[sender] else { return }
+        sender.backgroundColor = keyType.tappedBackgroundColor(shifted: currentShifted)
+    }
+
+    @objc private func keyTouchUp(_ sender: UIButton) {
+        guard let keyType = keyTypeMap[sender] else { return }
+        sender.backgroundColor = keyType.backgroundColor(shifted: currentShifted)
     }
 
     @objc private func keyTapped(_ sender: UIButton) {
