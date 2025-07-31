@@ -501,8 +501,7 @@ class KeyboardTouchView: UIView {
     var onKeyTouchUp: ((KeyData) -> Void)?
 
     // Multi-touch support
-    private var activeTouches: [UITouch: KeyData] = [:]
-    private var touchQueue: [UITouch] = []
+    private var touchQueue: [(UITouch, KeyData)] = []
     private var pressedKeys: Set<Int> = []
 
     override init(frame: CGRect) {
@@ -549,8 +548,7 @@ class KeyboardTouchView: UIView {
             let location = touch.location(in: self)
 
             if let key = keyData.first(where: { $0.frame.contains(location) }) {
-                activeTouches[touch] = key
-                touchQueue.append(touch)
+                touchQueue.append((touch, key))
                 pressedKeys.insert(key.index)
                 onKeyTouchDown?(key)
             }
@@ -559,32 +557,25 @@ class KeyboardTouchView: UIView {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            if activeTouches[touch] != nil {
-                processQueueUpToTouch(touch)
-            }
+            processQueueUpToTouch(touch)
         }
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            if activeTouches[touch] != nil {
-                processQueueUpToTouch(touch)
-            }
+            processQueueUpToTouch(touch)
         }
     }
 
     private func processQueueUpToTouch(_ endingTouch: UITouch) {
-        guard let endingTouchIndex = touchQueue.firstIndex(of: endingTouch) else { return }
+        guard let endingTouchIndex = touchQueue.firstIndex(where: { $0.0 === endingTouch }) else { return }
 
         // Process all touches up to and including the ending touch, in order
         let touchesToProcess = Array(touchQueue[0...endingTouchIndex])
 
-        for touch in touchesToProcess {
-            if let key = activeTouches[touch] {
-                onKeyTouchUp?(key)
-                activeTouches.removeValue(forKey: touch)
-                pressedKeys.remove(key.index)
-            }
+        for (touch, key) in touchesToProcess {
+            onKeyTouchUp?(key)
+            pressedKeys.remove(key.index)
         }
 
         // Remove processed touches from queue

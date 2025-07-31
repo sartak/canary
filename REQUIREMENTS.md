@@ -30,6 +30,7 @@
 - **Text Input Traits**: Respond to UITextInputTraits properties (autocapitalization, autocorrection, smart quotes, etc.)
 - **Key Repeat**: Hold backspace to continuously delete characters
 - **Caps Lock**: Double-tap shift or dedicated caps lock key for all-caps typing
+- **Multi-Touch Typing**: Support simultaneous key presses with ordered activation - touch downs are processed in order, but any touch up activates all keys in the queue up to and including that key, allowing for faster typing patterns (e.g., A down → B down → C down → C up produces "ABC")
 
 ### Text Processing
 - **Text Expansion**: Custom shortcuts that expand to frequently used phrases
