@@ -51,13 +51,14 @@
 **Goal**: Make keyboard look and feel great
 
 ### UI Improvements
-- [ ] Add visual key press feedback
+- [x] Add visual key press feedback
 - [ ] Add haptic feedback for key presses
 - [ ] Support light and dark mode
 - [ ] Add keyboard dismiss button using dismissKeyboard()
 - [ ] Add key repeat for backspace (hold to continuously delete)
 - [ ] Implement caps lock functionality (double-tap shift or dedicated key)
 - [ ] Remove incorrect animation when the keyboard initially launches
+- [ ] Improve layout for iPad (floating keyboard mode, corner radius, smaller gaps)
 
 ## Milestone 5: Advanced Input
 **Goal**: Additional gesture-based input features

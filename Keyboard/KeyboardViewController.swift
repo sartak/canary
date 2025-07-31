@@ -9,6 +9,8 @@ import UIKit
 
 private let primaryKeyColor = UIColor(white: 115/255.0, alpha: 1.0)
 private let secondaryKeyColor = UIColor(white: 63/255.0, alpha: 1.0)
+private let popoutFontSize: CGFloat = 44
+private let largeScreenWidth: CGFloat = 600
 
 struct DeviceLayout {
     let alphaKeyWidth: CGFloat
@@ -33,7 +35,7 @@ struct DeviceLayout {
         let baseVerticalGap: CGFloat = 12
         let baseKeyHeight: CGFloat = 36
         let baseSplitWidth: CGFloat = 16
-        let baseTopPadding = baseVerticalGap
+        let baseTopPadding: CGFloat = 48
         let baseBottomPadding: CGFloat = 0
 
         let layout = DeviceLayout(
@@ -102,9 +104,11 @@ enum KeyType {
         }
     }
 
-    func tappedBackgroundColor(shifted: Bool) -> UIColor {
+    func tappedBackgroundColor(shifted: Bool, isLargeScreen: Bool) -> UIColor {
         switch self {
-        case .simple, .space:
+        case .simple:
+            return isLargeScreen ? secondaryKeyColor : primaryKeyColor
+        case .space:
             return secondaryKeyColor
         case .shift:
             return shifted ? secondaryKeyColor : primaryKeyColor
@@ -491,6 +495,7 @@ class KeyboardViewController: UIInputViewController {
     private var heightConstraint: NSLayoutConstraint?
     private var keyboardLayout: KeyboardLayout = .canary
     private var needsGlobe: Bool = false
+    private var keyPopout: UIView?
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -591,7 +596,9 @@ class KeyboardViewController: UIInputViewController {
         button.layer.cornerRadius = 5
 
         button.addTarget(self, action: #selector(keyTouchDown(_:)), for: .touchDown)
-        button.addTarget(self, action: #selector(keyTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        button.addTarget(self, action: #selector(keyTouchUpInside(_:)), for: .touchUpInside)
+        button.addTarget(self, action: #selector(keyTouchUpOutside(_:)), for: .touchUpOutside)
+        button.addTarget(self, action: #selector(keyTouchCancel(_:)), for: .touchCancel)
         button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         keyTypeMap[button] = keyType
 
@@ -600,12 +607,40 @@ class KeyboardViewController: UIInputViewController {
 
     @objc private func keyTouchDown(_ sender: UIButton) {
         guard let keyType = keyTypeMap[sender] else { return }
-        sender.backgroundColor = keyType.tappedBackgroundColor(shifted: currentShifted)
+        let isLargeScreen = view.bounds.width > largeScreenWidth
+        sender.backgroundColor = keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen)
+
+        // Show popout for simple character keys on smaller screens only
+        if case .simple = keyType, !isLargeScreen {
+            sender.setTitle("", for: .normal)
+            showKeyPopout(for: sender, keyType: keyType)
+        }
     }
 
-    @objc private func keyTouchUp(_ sender: UIButton) {
+    @objc private func keyTouchUpInside(_ sender: UIButton) {
         guard let keyType = keyTypeMap[sender] else { return }
+        keyTouchUpCommon(sender, keyType)
+    }
+
+    @objc private func keyTouchUpOutside(_ sender: UIButton) {
+        guard let keyType = keyTypeMap[sender] else { return }
+        keyTouchUpCommon(sender, keyType)
+    }
+
+    @objc private func keyTouchCancel(_ sender: UIButton) {
+        guard let keyType = keyTypeMap[sender] else { return }
+        keyTouchUpCommon(sender, keyType)
+    }
+
+    private func keyTouchUpCommon(_ sender: UIButton, _ keyType: KeyType) {
         sender.backgroundColor = keyType.backgroundColor(shifted: currentShifted)
+
+        // Restore original key text if we hid it (only on smaller screens)
+        if case .simple = keyType, view.bounds.width <= largeScreenWidth {
+            sender.setTitle(keyType.label(shifted: currentShifted), for: .normal)
+        }
+
+        hideKeyPopout()
     }
 
     @objc private func keyTapped(_ sender: UIButton) {
@@ -654,6 +689,113 @@ class KeyboardViewController: UIInputViewController {
     private func rebuildKeyboard() {
         view.subviews.forEach { $0.removeFromSuperview() }
         keyTypeMap.removeAll()
+        keyPopout = nil
         setupKeyboard()
+    }
+
+    private func showKeyPopout(for button: UIButton, keyType: KeyType) {
+        // Scale popout size based on device layout like keys
+        let basePopoutTopWidth: CGFloat = 45
+        let basePopoutHeight: CGFloat = 55
+        let screenBounds = UIScreen.main.bounds
+        let isLandscape = screenBounds.width > screenBounds.height
+        let effectiveWidth = view.bounds.width
+        let effectiveHeight = isLandscape ? screenBounds.width : screenBounds.height
+        let referenceWidth: CGFloat = 402
+        let referenceHeight: CGFloat = 874
+        let widthScale = effectiveWidth / referenceWidth
+        let heightScale = effectiveHeight / referenceHeight
+
+        let popoutTopWidth = basePopoutTopWidth * widthScale
+        let popoutHeight = basePopoutHeight * heightScale
+        let keyWidth = button.frame.width
+
+        let popout = UIView()
+        popout.backgroundColor = .clear
+        popout.isUserInteractionEnabled = false
+
+        // Create funnel shape using CAShapeLayer
+        let shapeLayer = CAShapeLayer()
+        let path = UIBezierPath()
+
+        // Start from top-left of rounded rectangle
+        path.move(to: CGPoint(x: 5, y: 0))
+        path.addLine(to: CGPoint(x: popoutTopWidth - 5, y: 0))
+        path.addQuadCurve(to: CGPoint(x: popoutTopWidth, y: 5), controlPoint: CGPoint(x: popoutTopWidth, y: 0))
+        path.addLine(to: CGPoint(x: popoutTopWidth, y: popoutHeight - 15))
+
+        // Funnel down to key width with curves
+        let funnelStartX = max(0, (popoutTopWidth - keyWidth) / 2)
+        let funnelEndX = popoutTopWidth - funnelStartX
+        let controlY = popoutHeight - 5
+        let controlInset: CGFloat = 8
+
+        path.addQuadCurve(to: CGPoint(x: funnelEndX, y: popoutHeight),
+                         controlPoint: CGPoint(x: popoutTopWidth - controlInset, y: controlY))
+        path.addLine(to: CGPoint(x: funnelStartX, y: popoutHeight))
+        path.addQuadCurve(to: CGPoint(x: 0, y: popoutHeight - 15),
+                         controlPoint: CGPoint(x: controlInset, y: controlY))
+
+        // Left side of rounded rectangle
+        path.addLine(to: CGPoint(x: 0, y: 5))
+        path.addQuadCurve(to: CGPoint(x: 5, y: 0), controlPoint: CGPoint(x: 0, y: 0))
+        path.close()
+
+        shapeLayer.path = path.cgPath
+        shapeLayer.fillColor = primaryKeyColor.cgColor
+        shapeLayer.shadowColor = UIColor.black.cgColor
+        shapeLayer.shadowOffset = CGSize(width: 0, height: 1)
+        shapeLayer.shadowOpacity = 0.25
+        shapeLayer.shadowRadius = 3
+
+        // Create shadow path for top three edges only
+        let shadowPath = UIBezierPath()
+        shadowPath.move(to: CGPoint(x: 5, y: 0))
+        shadowPath.addLine(to: CGPoint(x: popoutTopWidth - 5, y: 0))
+        shadowPath.addQuadCurve(to: CGPoint(x: popoutTopWidth, y: 5), controlPoint: CGPoint(x: popoutTopWidth, y: 0))
+        shadowPath.addLine(to: CGPoint(x: popoutTopWidth, y: popoutHeight - 15))
+        shadowPath.addQuadCurve(to: CGPoint(x: 0, y: popoutHeight - 15),
+                               controlPoint: CGPoint(x: popoutTopWidth / 2, y: controlY))
+        shadowPath.addLine(to: CGPoint(x: 0, y: 5))
+        shadowPath.addQuadCurve(to: CGPoint(x: 5, y: 0), controlPoint: CGPoint(x: 0, y: 0))
+        shadowPath.close()
+
+        shapeLayer.shadowPath = shadowPath.cgPath
+        popout.layer.addSublayer(shapeLayer)
+
+        let label = UILabel()
+        label.text = keyType.label(shifted: currentShifted)
+        label.textColor = .white
+        label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
+        label.textAlignment = .center
+
+        popout.addSubview(label)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * 0.35)
+        ])
+
+        view.addSubview(popout)
+        keyPopout = popout
+
+        // Position popout above the button
+        let buttonCenter = button.center
+        let idealX = buttonCenter.x - popoutTopWidth / 2
+        let maxX = view.bounds.width - popoutTopWidth - 5
+        let adjustedX = max(5, min(idealX, maxX)) // Keep within screen bounds
+
+        popout.frame = CGRect(
+            x: adjustedX,
+            y: buttonCenter.y - popoutHeight - 10,
+            width: popoutTopWidth,
+            height: popoutHeight
+        )
+    }
+
+    private func hideKeyPopout() {
+        guard let popout = keyPopout else { return }
+        popout.removeFromSuperview()
+        keyPopout = nil
     }
 }
