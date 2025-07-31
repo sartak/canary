@@ -129,29 +129,56 @@ class KeyboardTouchView: UIView {
             color.setFill()
             path.fill()
 
-            // Draw key text (hide text if this key has a popout showing)
-            let shouldHideText = keysWithPopouts.contains(key.index)
-            if !shouldHideText {
-                let text = key.keyType.label(shifted: currentShifted)
-                if !text.isEmpty {
+            // Draw key content (hide if this key has a popout showing)
+            let shouldHideContent = keysWithPopouts.contains(key.index)
+            if !shouldHideContent {
+                // Check if key should use SF Symbol
+                if let symbolName = key.keyType.sfSymbolName(shifted: currentShifted, pressed: isPressed) {
                     let fontSize = key.keyType.fontSize()
-                    let font = UIFont.systemFont(ofSize: fontSize)
-                    let attributes: [NSAttributedString.Key: Any] = [
-                        .font: font,
-                        .foregroundColor: theme.textColor
-                    ]
+                    let symbolConfig = UIImage.SymbolConfiguration(pointSize: fontSize, weight: .light)
+                    if let symbolImage = UIImage(systemName: symbolName, withConfiguration: symbolConfig) {
+                        // Draw SF Symbol
+                        let imageSize = symbolImage.size
+                        let imageRect = CGRect(
+                            x: key.frame.midX - imageSize.width / 2,
+                            y: key.frame.midY - imageSize.height / 2,
+                            width: imageSize.width,
+                            height: imageSize.height
+                        )
 
-                    let textSize = text.size(withAttributes: attributes)
-                    let textRect = CGRect(
-                        x: key.frame.midX - textSize.width / 2,
-                        y: key.frame.midY - textSize.height / 2,
-                        width: textSize.width,
-                        height: textSize.height
-                    )
-
-                    text.draw(in: textRect, withAttributes: attributes)
+                        // Tint the symbol with the text color
+                        symbolImage.withTintColor(theme.textColor, renderingMode: .alwaysOriginal).draw(in: imageRect)
+                    } else {
+                        // Fallback to text if SF Symbol fails to load
+                        drawKeyText(for: key, theme: theme)
+                    }
+                } else {
+                    // Draw regular text
+                    drawKeyText(for: key, theme: theme)
                 }
             }
+        }
+    }
+
+    private func drawKeyText(for key: KeyData, theme: ColorTheme) {
+        let text = key.keyType.label(shifted: currentShifted)
+        if !text.isEmpty {
+            let fontSize = key.keyType.fontSize()
+            let font = UIFont.systemFont(ofSize: fontSize)
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: theme.textColor
+            ]
+
+            let textSize = text.size(withAttributes: attributes)
+            let textRect = CGRect(
+                x: key.frame.midX - textSize.width / 2,
+                y: key.frame.midY - textSize.height / 2,
+                width: textSize.width,
+                height: textSize.height
+            )
+
+            text.draw(in: textRect, withAttributes: attributes)
         }
     }
 }

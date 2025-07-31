@@ -76,14 +76,27 @@ enum KeyType: Equatable {
         }
     }
 
+    func sfSymbolName(shifted: Bool = false, pressed: Bool = false) -> String? {
+        switch self {
+        case .globe:
+            return "globe"
+        case .shift:
+            return shifted ? "shift.fill" : "shift"
+        case .backspace:
+            return pressed ? "delete.backward.fill" : "delete.backward"
+        default:
+            return nil
+        }
+    }
+
     func label(shifted: Bool) -> String {
         switch self {
         case .simple(let char):
             return String(char)
         case .backspace:
-            return "⌫"
+            return "⌫" // Fallback if SF Symbol rendering fails
         case .shift:
-            return shifted ? "⬆︎" : "⇧"
+            return shifted ? "⬆︎" : "⇧" // Fallback if SF Symbol rendering fails
         case .enter:
             return "↩︎"
         case .space:
@@ -105,7 +118,7 @@ enum KeyType: Equatable {
                 return "QWE"
             }
         case .globe:
-            return "◉"
+            return "◉" // Fallback if SF Symbol rendering fails
         case .empty:
             return ""
         }

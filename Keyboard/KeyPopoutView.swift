@@ -83,17 +83,49 @@ class KeyPopoutView {
         popout.layer.addSublayer(shapeLayer)
 
         let label = UILabel()
-        label.text = keyData.keyType.label(shifted: shifted)
         label.textColor = theme.textColor
-        label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
         label.textAlignment = .center
 
-        popout.addSubview(label)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * 0.35)
-        ])
+        // Check if key should use SF Symbol
+        if let symbolName = keyData.keyType.sfSymbolName(shifted: shifted) {
+            let symbolConfig = UIImage.SymbolConfiguration(pointSize: popoutFontSize, weight: .light)
+            if let symbolImage = UIImage(systemName: symbolName, withConfiguration: symbolConfig) {
+                // Use SF Symbol as image
+                let imageView = UIImageView(image: symbolImage.withTintColor(theme.textColor, renderingMode: .alwaysOriginal))
+                imageView.contentMode = .scaleAspectFit
+
+                popout.addSubview(imageView)
+                imageView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    imageView.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
+                    imageView.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * 0.35),
+                    imageView.widthAnchor.constraint(equalToConstant: popoutFontSize),
+                    imageView.heightAnchor.constraint(equalToConstant: popoutFontSize)
+                ])
+            } else {
+                // Fallback to text if SF Symbol fails
+                label.text = keyData.keyType.label(shifted: shifted)
+                label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
+
+                popout.addSubview(label)
+                label.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    label.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
+                    label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * 0.35)
+                ])
+            }
+        } else {
+            // Use regular text
+            label.text = keyData.keyType.label(shifted: shifted)
+            label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
+
+            popout.addSubview(label)
+            label.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                label.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
+                label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * 0.35)
+            ])
+        }
 
         // Position popout above the key (always centered)
         let keyCenter = CGPoint(x: keyData.frame.midX, y: keyData.frame.midY)

@@ -201,7 +201,7 @@ class KeyboardViewController: UIInputViewController {
         dismissButton.tintColor = theme.decorationColor
 
         // Create downward chevron using SF Symbols
-        let chevronConfig = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        let chevronConfig = UIImage.SymbolConfiguration(pointSize: 16, weight: .light)
         let chevronImage = UIImage(systemName: "chevron.down", withConfiguration: chevronConfig)
         dismissButton.setImage(chevronImage, for: .normal)
 
