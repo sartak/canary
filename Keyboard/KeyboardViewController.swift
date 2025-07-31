@@ -496,11 +496,14 @@ enum KeyboardLayout {
 
 class KeyboardTouchView: UIView {
     var keyData: [KeyData] = []
-    var currentTouchedKey: KeyData?
     var currentShifted: Bool = false
-    var keyWithPopout: KeyData?
+    var keysWithPopouts: Set<CGRect> = []
     var onKeyTouchDown: ((KeyData) -> Void)?
     var onKeyTouchUp: ((KeyData) -> Void)?
+
+    // Multi-touch support
+    private var activeTouches: [UITouch: KeyData] = [:]
+    private var touchQueue: [UITouch] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -513,6 +516,9 @@ class KeyboardTouchView: UIView {
     }
 
     private func setupTouchHandling() {
+        // Enable multi-touch support
+        isMultipleTouchEnabled = true
+
         // Disable system gesture recognizer delays that cause edge touch issues
         DispatchQueue.main.async { [weak self] in
             self?.disableSystemGestureDelays()
@@ -539,27 +545,48 @@ class KeyboardTouchView: UIView {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        let location = touch.location(in: self)
+        for touch in touches {
+            let location = touch.location(in: self)
 
-        if let key = keyData.first(where: { $0.frame.contains(location) }) {
-            currentTouchedKey = key
-            onKeyTouchDown?(key)
+            if let key = keyData.first(where: { $0.frame.contains(location) }) {
+                activeTouches[touch] = key
+                touchQueue.append(touch)
+                onKeyTouchDown?(key)
+            }
         }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let touchedKey = currentTouchedKey {
-            onKeyTouchUp?(touchedKey)
-            currentTouchedKey = nil
+        for touch in touches {
+            if activeTouches[touch] != nil {
+                processQueueUpToTouch(touch)
+            }
         }
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let touchedKey = currentTouchedKey {
-            onKeyTouchUp?(touchedKey)
-            currentTouchedKey = nil
+        for touch in touches {
+            if activeTouches[touch] != nil {
+                processQueueUpToTouch(touch)
+            }
         }
+    }
+
+    private func processQueueUpToTouch(_ endingTouch: UITouch) {
+        guard let endingTouchIndex = touchQueue.firstIndex(of: endingTouch) else { return }
+
+        // Process all touches up to and including the ending touch, in order
+        let touchesToProcess = Array(touchQueue[0...endingTouchIndex])
+
+        for touch in touchesToProcess {
+            if let key = activeTouches[touch] {
+                onKeyTouchUp?(key)
+                activeTouches.removeValue(forKey: touch)
+            }
+        }
+
+        // Remove processed touches from queue
+        touchQueue.removeFirst(touchesToProcess.count)
     }
 
     override func draw(_ rect: CGRect) {
@@ -572,7 +599,7 @@ class KeyboardTouchView: UIView {
             path.fill()
 
             // Draw key text (hide text if this key has a popout showing)
-            let shouldHideText = keyWithPopout?.frame == key.frame
+            let shouldHideText = keysWithPopouts.contains(key.frame)
             if !shouldHideText {
                 let text = key.keyType.label(shifted: currentShifted)
                 if !text.isEmpty {
@@ -606,7 +633,7 @@ class KeyboardViewController: UIInputViewController {
     private var heightConstraint: NSLayoutConstraint?
     private var keyboardLayout: KeyboardLayout = .canary
     private var needsGlobe: Bool = false
-    private var keyPopout: UIView?
+    private var keyPopouts: [CGRect: UIView] = [:]
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -733,7 +760,7 @@ class KeyboardViewController: UIInputViewController {
 
         // Show popout for simple character keys on smaller screens only
         if case .simple = keyData.keyType, !isLargeScreen {
-            keyboardTouchView.keyWithPopout = keyData
+            keyboardTouchView.keysWithPopouts.insert(keyData.frame)
             showKeyPopout(for: keyData)
         }
 
@@ -751,8 +778,8 @@ class KeyboardViewController: UIInputViewController {
             )
         }
 
-        keyboardTouchView.keyWithPopout = nil
-        hideKeyPopout()
+        keyboardTouchView.keysWithPopouts.remove(keyData.frame)
+        hideKeyPopout(for: keyData)
         keyboardTouchView.setNeedsDisplay()
 
         // Handle the key tap
@@ -800,7 +827,7 @@ class KeyboardViewController: UIInputViewController {
 
     private func rebuildKeyboard() {
         view.subviews.forEach { $0.removeFromSuperview() }
-        keyPopout = nil
+        keyPopouts.removeAll()
         setupKeyboard()
     }
 
@@ -888,7 +915,7 @@ class KeyboardViewController: UIInputViewController {
         ])
 
         view.addSubview(popout)
-        keyPopout = popout
+        keyPopouts[keyData.frame] = popout
 
         // Position popout above the key (always centered)
         let keyCenter = CGPoint(x: keyData.frame.midX, y: keyData.frame.midY)
@@ -902,9 +929,9 @@ class KeyboardViewController: UIInputViewController {
         )
     }
 
-    private func hideKeyPopout() {
-        guard let popout = keyPopout else { return }
+    private func hideKeyPopout(for keyData: KeyData) {
+        guard let popout = keyPopouts[keyData.frame] else { return }
         popout.removeFromSuperview()
-        keyPopout = nil
+        keyPopouts.removeValue(forKey: keyData.frame)
     }
 }
