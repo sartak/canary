@@ -7,12 +7,11 @@
 
 import UIKit
 
-private let primaryKeyColor = UIColor(white: 115/255.0, alpha: 1.0)
 private let popoutFontSize: CGFloat = 44
 
 class KeyPopoutView {
 
-    static func createPopout(for keyData: KeyData, shifted: Bool, containerView: UIView) -> UIView {
+    static func createPopout(for keyData: KeyData, shifted: Bool, containerView: UIView, traitCollection: UITraitCollection) -> UIView {
         // Scale popout size based on device layout like keys
         let basePopoutTopWidth: CGFloat = 45
         let basePopoutHeight: CGFloat = 55
@@ -60,9 +59,10 @@ class KeyPopoutView {
         path.addQuadCurve(to: CGPoint(x: 5, y: 0), controlPoint: CGPoint(x: 0, y: 0))
         path.close()
 
+        let theme = ColorTheme.current(for: traitCollection)
         shapeLayer.path = path.cgPath
-        shapeLayer.fillColor = primaryKeyColor.cgColor
-        shapeLayer.shadowColor = UIColor.black.cgColor
+        shapeLayer.fillColor = theme.primaryKeyColor.cgColor
+        shapeLayer.shadowColor = theme.shadowColor.cgColor
         shapeLayer.shadowOffset = CGSize(width: 0, height: 1)
         shapeLayer.shadowOpacity = 0.25
         shapeLayer.shadowRadius = 3
@@ -84,7 +84,7 @@ class KeyPopoutView {
 
         let label = UILabel()
         label.text = keyData.keyType.label(shifted: shifted)
-        label.textColor = .white
+        label.textColor = theme.textColor
         label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
         label.textAlignment = .center
 

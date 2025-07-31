@@ -108,9 +108,9 @@ class KeyboardTouchView: UIView {
             let path = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
             let isPressed = pressedKeys.contains(key.index)
             let color = if isPressed {
-                key.keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen)
+                key.keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen, traitCollection: self.traitCollection)
             } else {
-                key.keyType.backgroundColor(shifted: currentShifted)
+                key.keyType.backgroundColor(shifted: currentShifted, traitCollection: self.traitCollection)
             }
             color.setFill()
             path.fill()
@@ -124,7 +124,7 @@ class KeyboardTouchView: UIView {
                     let font = UIFont.systemFont(ofSize: fontSize)
                     let attributes: [NSAttributedString.Key: Any] = [
                         .font: font,
-                        .foregroundColor: UIColor.white
+                        .foregroundColor: ColorTheme.current(for: self.traitCollection).textColor
                     ]
 
                     let textSize = text.size(withAttributes: attributes)

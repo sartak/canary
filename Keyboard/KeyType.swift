@@ -7,9 +7,6 @@
 
 import UIKit
 
-private let primaryKeyColor = UIColor(white: 115/255.0, alpha: 1.0)
-private let secondaryKeyColor = UIColor(white: 63/255.0, alpha: 1.0)
-
 enum Layer {
     case alpha
     case symbol
@@ -49,29 +46,31 @@ enum KeyType {
     case globe
     case empty
 
-    func backgroundColor(shifted: Bool) -> UIColor {
+    func backgroundColor(shifted: Bool, traitCollection: UITraitCollection) -> UIColor {
+        let theme = ColorTheme.current(for: traitCollection)
         switch self {
         case .simple, .space:
-            return primaryKeyColor
+            return theme.primaryKeyColor
         case .shift:
-            return shifted ? primaryKeyColor : secondaryKeyColor
+            return shifted ? theme.primaryKeyColor : theme.secondaryKeyColor
         case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe:
-            return secondaryKeyColor
+            return theme.secondaryKeyColor
         case .empty:
             return UIColor.clear
         }
     }
 
-    func tappedBackgroundColor(shifted: Bool, isLargeScreen: Bool) -> UIColor {
+    func tappedBackgroundColor(shifted: Bool, isLargeScreen: Bool, traitCollection: UITraitCollection) -> UIColor {
+        let theme = ColorTheme.current(for: traitCollection)
         switch self {
         case .simple:
-            return isLargeScreen ? secondaryKeyColor : primaryKeyColor
+            return isLargeScreen ? theme.secondaryKeyColor : theme.primaryKeyColor
         case .space:
-            return secondaryKeyColor
+            return theme.secondaryKeyColor
         case .shift:
-            return shifted ? secondaryKeyColor : primaryKeyColor
+            return shifted ? theme.secondaryKeyColor : theme.primaryKeyColor
         case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe:
-            return primaryKeyColor
+            return theme.primaryKeyColor
         case .empty:
             return UIColor.clear
         }

@@ -197,7 +197,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func showKeyPopout(for keyData: KeyData) {
-        let popout = KeyPopoutView.createPopout(for: keyData, shifted: currentShifted, containerView: view)
+        let popout = KeyPopoutView.createPopout(for: keyData, shifted: currentShifted, containerView: view, traitCollection: traitCollection)
         view.addSubview(popout)
         keyPopouts[keyData.index] = popout
     }
@@ -206,5 +206,13 @@ class KeyboardViewController: UIInputViewController {
         guard let popout = keyPopouts[keyData.index] else { return }
         popout.removeFromSuperview()
         keyPopouts.removeValue(forKey: keyData.index)
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+
+        if traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle {
+            keyboardTouchView?.setNeedsDisplay()
+        }
     }
 }

@@ -53,7 +53,7 @@
 ### UI Improvements
 - [x] Add visual key press feedback
 - [x] Add haptic feedback for key presses
-- [ ] Support light and dark mode
+- [x] Support light and dark mode
 - [ ] Add keyboard dismiss button using dismissKeyboard()
 - [ ] Add key repeat for backspace (hold to continuously delete)
 - [ ] Implement caps lock functionality (double-tap shift or dedicated key)
