@@ -9,16 +9,27 @@ import UIKit
 
 private let largeScreenWidth: CGFloat = 600
 
-class KeyboardTouchView: UIView {
-    var keyData: [KeyData] = []
+class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
+    var keyData: [KeyData] = [] {
+        didSet {
+            gestureRecognizer?.keyData = keyData
+        }
+    }
     var currentShifted: Bool = false
     var keysWithPopouts: Set<Int> = []
-    var onKeyTouchDown: ((KeyData) -> Void)?
-    var onKeyTouchUp: ((KeyData) -> Void)?
+    var onKeyTouchDown: ((KeyData) -> Void)? {
+        didSet {
+            gestureRecognizer?.onKeyTouchDown = onKeyTouchDown
+        }
+    }
+    var onKeyTouchUp: ((KeyData) -> Void)? {
+        didSet {
+            gestureRecognizer?.onKeyTouchUp = onKeyTouchUp
+        }
+    }
 
-    // Multi-touch support
-    private var touchQueue: [(UITouch, KeyData)] = []
-    private var pressedKeys: Set<Int> = []
+    // Multi-touch gesture recognizer
+    private var gestureRecognizer: MultiTouchKeyboardGestureRecognizer!
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -34,69 +45,25 @@ class KeyboardTouchView: UIView {
         // Enable multi-touch support
         isMultipleTouchEnabled = true
 
-        // Disable system gesture recognizer delays that cause edge touch issues
-        DispatchQueue.main.async { [weak self] in
-            self?.disableSystemGestureDelays()
-        }
+        // Create and configure gesture recognizer
+        gestureRecognizer = MultiTouchKeyboardGestureRecognizer(target: self, action: #selector(handleGesture(_:)))
+        gestureRecognizer.delegate = self
+        addGestureRecognizer(gestureRecognizer)
     }
 
-    private func disableSystemGestureDelays() {
-        // Find the window and disable delaysTouchesBegan on system gesture recognizers
-        guard let window = self.superview?.window ?? self.window else {
-            // If we don't have a window yet, try again later
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                self?.disableSystemGestureDelays()
-            }
-            return
-        }
-
-        if let gestureRecognizers = window.gestureRecognizers {
-            for recognizer in gestureRecognizers {
-                if recognizer.delaysTouchesBegan {
-                    recognizer.delaysTouchesBegan = false
-                }
-            }
-        }
+    @objc private func handleGesture(_ recognizer: MultiTouchKeyboardGestureRecognizer) {
+        // The gesture recognizer handles all touch logic through callbacks
+        // This method exists to satisfy the target-action pattern but doesn't need implementation
     }
 
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            let location = touch.location(in: self)
+    // MARK: - UIGestureRecognizerDelegate
 
-            if let key = keyData.first(where: { $0.frame.contains(location) }) {
-                touchQueue.append((touch, key))
-                pressedKeys.insert(key.index)
-                onKeyTouchDown?(key)
-            }
-        }
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Allow our custom gesture recognizer to work simultaneously with other recognizers
+        return gestureRecognizer is MultiTouchKeyboardGestureRecognizer
     }
 
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            processQueueUpToTouch(touch)
-        }
-    }
 
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
-            processQueueUpToTouch(touch)
-        }
-    }
-
-    private func processQueueUpToTouch(_ endingTouch: UITouch) {
-        guard let endingTouchIndex = touchQueue.firstIndex(where: { $0.0 === endingTouch }) else { return }
-
-        // Process all touches up to and including the ending touch, in order
-        let touchesToProcess = Array(touchQueue[0...endingTouchIndex])
-
-        for (touch, key) in touchesToProcess {
-            onKeyTouchUp?(key)
-            pressedKeys.remove(key.index)
-        }
-
-        // Remove processed touches from queue
-        touchQueue.removeFirst(touchesToProcess.count)
-    }
 
     override func draw(_ rect: CGRect) {
         super.draw(rect)
@@ -104,10 +71,10 @@ class KeyboardTouchView: UIView {
         let isLargeScreen = bounds.width > largeScreenWidth
 
         let theme = ColorTheme.current(for: self.traitCollection)
-        
+
         for key in keyData {
-            let isPressed = pressedKeys.contains(key.index)
-            
+            let isPressed = gestureRecognizer.pressedKeyIndices.contains(key.index)
+
             // Draw key shadow (only for visible keys, not when pressed)
             if !isPressed && key.keyType != .empty {
                 let shadowPath = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
