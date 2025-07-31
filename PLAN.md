@@ -52,7 +52,7 @@
 
 ### UI Improvements
 - [x] Add visual key press feedback
-- [ ] Add haptic feedback for key presses
+- [x] Add haptic feedback for key presses
 - [ ] Support light and dark mode
 - [ ] Add keyboard dismiss button using dismissKeyboard()
 - [ ] Add key repeat for backspace (hold to continuously delete)

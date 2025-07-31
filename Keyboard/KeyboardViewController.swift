@@ -132,6 +132,9 @@ class KeyboardViewController: UIInputViewController {
     private func handleKeyTouchDown(_ keyData: KeyData) {
         keyboardTouchView.setNeedsDisplay()
 
+        // Provide haptic feedback for key press
+        HapticFeedback.shared.keyPress(for: keyData.keyType, hasFullAccess: hasFullAccess)
+
         let isLargeScreen = view.bounds.width > largeScreenWidth
         if case .simple = keyData.keyType, !isLargeScreen {
             keyboardTouchView.keysWithPopouts.insert(keyData.index)
