@@ -58,6 +58,13 @@ struct DeviceLayout {
     }
 }
 
+struct KeyData {
+    let keyType: KeyType
+    let frame: CGRect
+    let originalColor: UIColor
+    let tappedColor: UIColor
+}
+
 enum Layer {
     case alpha
     case symbol
@@ -487,10 +494,78 @@ enum KeyboardLayout {
     }
 }
 
+class KeyboardTouchView: UIView {
+    var keyData: [KeyData] = []
+    var currentTouchedKey: KeyData?
+    var currentShifted: Bool = false
+    var keyWithPopout: KeyData?
+    var onKeyTouchDown: ((KeyData) -> Void)?
+    var onKeyTouchUp: ((KeyData) -> Void)?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let location = touch.location(in: self)
+
+        if let key = keyData.first(where: { $0.frame.contains(location) }) {
+            currentTouchedKey = key
+            onKeyTouchDown?(key)
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let touchedKey = currentTouchedKey {
+            onKeyTouchUp?(touchedKey)
+            currentTouchedKey = nil
+        }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let touchedKey = currentTouchedKey {
+            onKeyTouchUp?(touchedKey)
+            currentTouchedKey = nil
+        }
+    }
+
+    override func draw(_ rect: CGRect) {
+        super.draw(rect)
+
+        for key in keyData {
+            // Draw rounded key background
+            let path = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
+            key.originalColor.setFill()
+            path.fill()
+
+            // Draw key text (hide text if this key has a popout showing)
+            let shouldHideText = keyWithPopout?.frame == key.frame
+            if !shouldHideText {
+                let text = key.keyType.label(shifted: currentShifted)
+                if !text.isEmpty {
+                    let fontSize = key.keyType.fontSize()
+                    let font = UIFont.systemFont(ofSize: fontSize)
+                    let attributes: [NSAttributedString.Key: Any] = [
+                        .font: font,
+                        .foregroundColor: UIColor.white
+                    ]
+
+                    let textSize = text.size(withAttributes: attributes)
+                    let textRect = CGRect(
+                        x: key.frame.midX - textSize.width / 2,
+                        y: key.frame.midY - textSize.height / 2,
+                        width: textSize.width,
+                        height: textSize.height
+                    )
+
+                    text.draw(in: textRect, withAttributes: attributes)
+                }
+            }
+        }
+    }
+}
+
 class KeyboardViewController: UIInputViewController {
     private var currentLayer: Layer = .alpha
     private var currentShifted: Bool = false
-    private var keyTypeMap: [UIButton: KeyType] = [:]
+    private var keyboardTouchView: KeyboardTouchView!
     private var deviceLayout: DeviceLayout!
     private var heightConstraint: NSLayoutConstraint?
     private var keyboardLayout: KeyboardLayout = .canary
@@ -520,19 +595,34 @@ class KeyboardViewController: UIInputViewController {
 
         deviceLayout = DeviceLayout.forCurrentDevice(containerWidth: effectiveWidth, containerHeight: effectiveHeight)
 
-        let keyboardView = createKeyboardView()
-        view.addSubview(keyboardView)
+        keyboardTouchView = KeyboardTouchView()
+        keyboardTouchView.backgroundColor = UIColor.clear
+        keyboardTouchView.currentShifted = currentShifted
+        keyboardTouchView.keyData = createKeyData()
+        keyboardTouchView.setNeedsDisplay()
 
-        keyboardView.translatesAutoresizingMaskIntoConstraints = false
+        keyboardTouchView.onKeyTouchDown = { [weak self] keyData in
+            self?.handleKeyTouchDown(keyData)
+        }
+
+        keyboardTouchView.onKeyTouchUp = { [weak self] keyData in
+            self?.handleKeyTouchUp(keyData)
+        }
+
+        // Calculate keyboard height first
+        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: currentShifted, layout: keyboardLayout, needsGlobe: needsGlobe)
+
+        view.addSubview(keyboardTouchView)
+
+        keyboardTouchView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            keyboardView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            keyboardView.topAnchor.constraint(equalTo: view.topAnchor),
-            keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            keyboardTouchView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            keyboardTouchView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            keyboardTouchView.topAnchor.constraint(equalTo: view.topAnchor),
+            keyboardTouchView.heightAnchor.constraint(equalToConstant: calculatedHeight)
         ])
 
         // Set explicit height constraint for the main view
-        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: currentShifted, layout: keyboardLayout, needsGlobe: needsGlobe)
         heightConstraint = NSLayoutConstraint(
             item: view,
             attribute: .height,
@@ -546,31 +636,37 @@ class KeyboardViewController: UIInputViewController {
         view.addConstraint(heightConstraint!)
     }
 
-    private func createKeyboardView() -> UIView {
-        let containerView = UIView()
-
+    private func createKeyData() -> [KeyData] {
+        var keys: [KeyData] = []
         var yOffset: CGFloat = deviceLayout.topPadding
 
         for (rowIndex, row) in keyboardLayout.nodeRows(for: currentLayer, shifted: currentShifted, layout: deviceLayout, needsGlobe: needsGlobe).enumerated() {
-            createRowKeys(for: row, rowIndex: rowIndex, yOffset: yOffset, in: containerView)
+            keys.append(contentsOf: createRowKeyData(for: row, rowIndex: rowIndex, yOffset: yOffset))
             yOffset += deviceLayout.keyHeight + deviceLayout.verticalGap
         }
 
-        return containerView
+        return keys
     }
 
-    private func createRowKeys(for row: [Node], rowIndex: Int, yOffset: CGFloat, in containerView: UIView) {
+    private func createRowKeyData(for row: [Node], rowIndex: Int, yOffset: CGFloat) -> [KeyData] {
         let containerWidth = view.bounds.width
         let rowWidth = Node.calculateRowWidth(for: row)
         let rowStartX = (containerWidth - rowWidth) / 2
         var xOffset: CGFloat = rowStartX
+        var keys: [KeyData] = []
 
         for node in row {
             switch node {
             case .key(let keyType, let keyWidth):
-                let keyButton = createKeyButton(keyType: keyType)
-                keyButton.frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: deviceLayout.keyHeight)
-                containerView.addSubview(keyButton)
+                let frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: deviceLayout.keyHeight)
+                let isLargeScreen = view.bounds.width > largeScreenWidth
+                let keyData = KeyData(
+                    keyType: keyType,
+                    frame: frame,
+                    originalColor: keyType.backgroundColor(shifted: currentShifted),
+                    tappedColor: keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen)
+                )
+                keys.append(keyData)
                 xOffset += keyWidth
             case .gap(let gapWidth):
                 xOffset += gapWidth
@@ -578,90 +674,70 @@ class KeyboardViewController: UIInputViewController {
                 xOffset += splitWidth
             }
         }
+
+        return keys
     }
 
 
 
 
 
-    private func createKeyButton(keyType: KeyType) -> UIButton {
-        let button = UIButton(type: .custom)
-
-        let displayText = keyType.label(shifted: currentShifted)
-        button.setTitle(displayText, for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: keyType.fontSize(), weight: .regular)
-
-        button.backgroundColor = keyType.backgroundColor(shifted: currentShifted)
-        button.layer.cornerRadius = 5
-
-        button.addTarget(self, action: #selector(keyTouchDown(_:)), for: .touchDown)
-        button.addTarget(self, action: #selector(keyTouchUpInside(_:)), for: .touchUpInside)
-        button.addTarget(self, action: #selector(keyTouchUpOutside(_:)), for: .touchUpOutside)
-        button.addTarget(self, action: #selector(keyTouchCancel(_:)), for: .touchCancel)
-        button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
-        keyTypeMap[button] = keyType
-
-        return button
-    }
-
-    @objc private func keyTouchDown(_ sender: UIButton) {
-        guard let keyType = keyTypeMap[sender] else { return }
+    private func handleKeyTouchDown(_ keyData: KeyData) {
         let isLargeScreen = view.bounds.width > largeScreenWidth
-        sender.backgroundColor = keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen)
+
+        // Update the key's visual state and trigger redraw
+        if let index = keyboardTouchView.keyData.firstIndex(where: { $0.frame == keyData.frame }) {
+            keyboardTouchView.keyData[index] = KeyData(
+                keyType: keyData.keyType,
+                frame: keyData.frame,
+                originalColor: keyData.tappedColor,
+                tappedColor: keyData.tappedColor
+            )
+        }
 
         // Show popout for simple character keys on smaller screens only
-        if case .simple = keyType, !isLargeScreen {
-            sender.setTitle("", for: .normal)
-            showKeyPopout(for: sender, keyType: keyType)
-        }
-    }
-
-    @objc private func keyTouchUpInside(_ sender: UIButton) {
-        guard let keyType = keyTypeMap[sender] else { return }
-        keyTouchUpCommon(sender, keyType)
-    }
-
-    @objc private func keyTouchUpOutside(_ sender: UIButton) {
-        guard let keyType = keyTypeMap[sender] else { return }
-        keyTouchUpCommon(sender, keyType)
-    }
-
-    @objc private func keyTouchCancel(_ sender: UIButton) {
-        guard let keyType = keyTypeMap[sender] else { return }
-        keyTouchUpCommon(sender, keyType)
-    }
-
-    private func keyTouchUpCommon(_ sender: UIButton, _ keyType: KeyType) {
-        sender.backgroundColor = keyType.backgroundColor(shifted: currentShifted)
-
-        // Restore original key text if we hid it (only on smaller screens)
-        if case .simple = keyType, view.bounds.width <= largeScreenWidth {
-            sender.setTitle(keyType.label(shifted: currentShifted), for: .normal)
+        if case .simple = keyData.keyType, !isLargeScreen {
+            keyboardTouchView.keyWithPopout = keyData
+            showKeyPopout(for: keyData)
         }
 
+        keyboardTouchView.setNeedsDisplay()
+    }
+
+    private func handleKeyTouchUp(_ keyData: KeyData) {
+        // Restore original color and trigger redraw
+        if let index = keyboardTouchView.keyData.firstIndex(where: { $0.frame == keyData.frame }) {
+            keyboardTouchView.keyData[index] = KeyData(
+                keyType: keyData.keyType,
+                frame: keyData.frame,
+                originalColor: keyData.originalColor,
+                tappedColor: keyData.tappedColor
+            )
+        }
+
+        keyboardTouchView.keyWithPopout = nil
         hideKeyPopout()
+        keyboardTouchView.setNeedsDisplay()
+
+        // Handle the key tap
+        keyData.keyType.didTap(textDocumentProxy: textDocumentProxy,
+                              layerSwitchHandler: { [weak self] newLayer in
+                                  self?.switchToLayer(newLayer)
+                              },
+                              layoutSwitchHandler: { [weak self] newLayout in
+                                  self?.switchToLayout(newLayout)
+                              },
+                              shiftHandler: { [weak self] in
+                                  self?.toggleShift()
+                              },
+                              autoUnshiftHandler: { [weak self] in
+                                  self?.autoUnshift()
+                              },
+                              globeHandler: { [weak self] in
+                                  self?.advanceToNextInputMode()
+                              })
     }
 
-    @objc private func keyTapped(_ sender: UIButton) {
-        guard let keyType = keyTypeMap[sender] else { return }
-        keyType.didTap(textDocumentProxy: textDocumentProxy,
-                      layerSwitchHandler: { [weak self] newLayer in
-                          self?.switchToLayer(newLayer)
-                      },
-                      layoutSwitchHandler: { [weak self] newLayout in
-                          self?.switchToLayout(newLayout)
-                      },
-                      shiftHandler: { [weak self] in
-                          self?.toggleShift()
-                      },
-                      autoUnshiftHandler: { [weak self] in
-                          self?.autoUnshift()
-                      },
-                      globeHandler: { [weak self] in
-                          self?.advanceToNextInputMode()
-                      })
-    }
 
     private func toggleShift() {
         currentShifted.toggle()
@@ -688,12 +764,11 @@ class KeyboardViewController: UIInputViewController {
 
     private func rebuildKeyboard() {
         view.subviews.forEach { $0.removeFromSuperview() }
-        keyTypeMap.removeAll()
         keyPopout = nil
         setupKeyboard()
     }
 
-    private func showKeyPopout(for button: UIButton, keyType: KeyType) {
+    private func showKeyPopout(for keyData: KeyData) {
         // Scale popout size based on device layout like keys
         let basePopoutTopWidth: CGFloat = 45
         let basePopoutHeight: CGFloat = 55
@@ -708,7 +783,7 @@ class KeyboardViewController: UIInputViewController {
 
         let popoutTopWidth = basePopoutTopWidth * widthScale
         let popoutHeight = basePopoutHeight * heightScale
-        let keyWidth = button.frame.width
+        let keyWidth = keyData.frame.width
 
         let popout = UIView()
         popout.backgroundColor = .clear
@@ -764,7 +839,7 @@ class KeyboardViewController: UIInputViewController {
         popout.layer.addSublayer(shapeLayer)
 
         let label = UILabel()
-        label.text = keyType.label(shifted: currentShifted)
+        label.text = keyData.keyType.label(shifted: currentShifted)
         label.textColor = .white
         label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
         label.textAlignment = .center
@@ -779,15 +854,13 @@ class KeyboardViewController: UIInputViewController {
         view.addSubview(popout)
         keyPopout = popout
 
-        // Position popout above the button
-        let buttonCenter = button.center
-        let idealX = buttonCenter.x - popoutTopWidth / 2
-        let maxX = view.bounds.width - popoutTopWidth - 5
-        let adjustedX = max(5, min(idealX, maxX)) // Keep within screen bounds
+        // Position popout above the key (always centered)
+        let keyCenter = CGPoint(x: keyData.frame.midX, y: keyData.frame.midY)
+        let popoutX = keyCenter.x - popoutTopWidth / 2
 
         popout.frame = CGRect(
-            x: adjustedX,
-            y: buttonCenter.y - popoutHeight - 10,
+            x: popoutX,
+            y: keyCenter.y - popoutHeight - 10,
             width: popoutTopWidth,
             height: popoutHeight
         )
