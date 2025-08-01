@@ -7,11 +7,39 @@
 
 import UIKit
 
+enum Layer: Equatable {
+    case alpha
+    case symbol
+    case number
+}
+
+enum Node {
+    case key(Key, CGFloat)
+    case gap(CGFloat)
+    case split(CGFloat)
+
+    static func calculateRowWidth(for row: [Node]) -> CGFloat {
+        return row.reduce(0) { total, node in
+            switch node {
+            case .key(_, let width): return total + width
+            case .gap(let width): return total + width
+            case .split(let width): return total + width
+            }
+        }
+    }
+}
+
+struct KeyData {
+    let index: Int
+    let key: Key
+    let frame: CGRect
+}
+
 enum KeyboardLayout: Equatable {
     case canary
     case qwerty
 
-    func rows(for layer: Layer, shifted: Bool, needsGlobe: Bool) -> [[KeyType]] {
+    func rows(for layer: Layer, shifted: Bool, needsGlobe: Bool) -> [[Key]] {
         switch self {
         case .canary:
             let baseRows = canaryRows(for: layer, shifted: shifted)
@@ -21,7 +49,7 @@ enum KeyboardLayout: Equatable {
                 // Filter out globe key from all rows
                 return baseRows.map { row in
                     row.filter { key in
-                        if case .globe = key {
+                        if case .globe = key.keyType {
                             return false
                         }
                         return true
@@ -36,7 +64,7 @@ enum KeyboardLayout: Equatable {
                 // Filter out globe key from all rows
                 return baseRows.map { row in
                     row.filter { key in
-                        if case .globe = key {
+                        if case .globe = key.keyType {
                             return false
                         }
                         return true
@@ -55,80 +83,76 @@ enum KeyboardLayout: Equatable {
         }
     }
 
-    private func canaryRows(for layer: Layer, shifted: Bool) -> [[KeyType]] {
-        let apostrophe: KeyType = shifted ? .simple("\"") : .simple("'")
-        let period: KeyType = shifted ? .simple("!") : .simple(".")
-        let comma: KeyType = shifted ? .simple("?") : .simple(",")
+    private func canaryRows(for layer: Layer, shifted: Bool) -> [[Key]] {
+        let apostrophe = Key(shifted ? .simple("\"") : .simple("'"))
+        let period = Key(shifted ? .simple("!") : .simple("."))
+        let comma = Key(shifted ? .simple("?") : .simple(","))
 
         switch layer {
         case .alpha:
             if shifted {
                 return [
-                    [.simple("W"), .simple("L"), .simple("Y"), .simple("P"), .simple("B"), .simple("Z"), .simple("F"), .simple("O"), .simple("U"), apostrophe],
-                    [.simple("C"), .simple("R"), .simple("S"), .simple("T"), .simple("G"), .simple("M"), .simple("N"), .simple("E"), .simple("I"), .simple("A")],
-                    [.simple("Q"), .simple("J"), .simple("V"), .simple("D"), .simple("K"), .simple("X"), .simple("H"), period, comma, .enter],
-                    [.globe, .layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
+                    [Key(.simple("W")), Key(.simple("L")), Key(.simple("Y")), Key(.simple("P")), Key(.simple("B")), Key(.simple("Z")), Key(.simple("F")), Key(.simple("O")), Key(.simple("U")), apostrophe],
+                    [Key(.simple("C")), Key(.simple("R")), Key(.simple("S")), Key(.simple("T")), Key(.simple("G")), Key(.simple("M")), Key(.simple("N")), Key(.simple("E")), Key(.simple("I")), Key(.simple("A"))],
+                    [Key(.simple("Q")), Key(.simple("J")), Key(.simple("V")), Key(.simple("D")), Key(.simple("K")), Key(.simple("X")), Key(.simple("H")), period, comma, Key(.enter)],
+                    [Key(.globe), Key(.layerSwitch(.symbol)), Key(.shift, doubleTapBehavior: .capsLock), Key(.backspace, longPressBehavior: .repeating), Key(.space), Key(.layerSwitch(.number))],
                 ]
             } else {
                 return [
-                    [.simple("w"), .simple("l"), .simple("y"), .simple("p"), .simple("b"), .simple("z"), .simple("f"), .simple("o"), .simple("u"), apostrophe],
-                    [.simple("c"), .simple("r"), .simple("s"), .simple("t"), .simple("g"), .simple("m"), .simple("n"), .simple("e"), .simple("i"), .simple("a")],
-                    [.simple("q"), .simple("j"), .simple("v"), .simple("d"), .simple("k"), .simple("x"), .simple("h"), period, comma, .enter],
-                    [.globe, .layerSwitch(.symbol), .shift, .backspace, .space, .layerSwitch(.number)],
+                    [Key(.simple("w")), Key(.simple("l")), Key(.simple("y")), Key(.simple("p")), Key(.simple("b")), Key(.simple("z")), Key(.simple("f")), Key(.simple("o")), Key(.simple("u")), apostrophe],
+                    [Key(.simple("c")), Key(.simple("r")), Key(.simple("s")), Key(.simple("t")), Key(.simple("g")), Key(.simple("m")), Key(.simple("n")), Key(.simple("e")), Key(.simple("i")), Key(.simple("a"))],
+                    [Key(.simple("q")), Key(.simple("j")), Key(.simple("v")), Key(.simple("d")), Key(.simple("k")), Key(.simple("x")), Key(.simple("h")), period, comma, Key(.enter)],
+                    [Key(.globe), Key(.layerSwitch(.symbol)), Key(.shift, doubleTapBehavior: .capsLock), Key(.backspace, longPressBehavior: .repeating), Key(.space), Key(.layerSwitch(.number))],
                 ]
             }
         case .symbol:
             return [
-                [.simple("`"), .simple("~"), .simple("\\"), .simple("{"), .simple("$"), .simple("%"), .simple("}"), .simple("/"), .simple("#"), apostrophe],
-                [.simple("&"), .simple("*"), .simple("="), .simple("("), .simple("<"), .simple(">"), .simple(")"), .simple("-"), .simple("+"), .simple("|")],
-                [.simple("—"), .simple("@"), .simple("_"), .simple("["), .simple("…"), .simple("^"), .simple("]"), period, comma, .enter],
-                [.globe, .layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.number)],
+                [Key(.simple("`")), Key(.simple("~")), Key(.simple("\\")), Key(.simple("{")), Key(.simple("$")), Key(.simple("%")), Key(.simple("}")), Key(.simple("/")), Key(.simple("#")), apostrophe],
+                [Key(.simple("&")), Key(.simple("*")), Key(.simple("=")), Key(.simple("(")), Key(.simple("<")), Key(.simple(">")), Key(.simple(")")), Key(.simple("-")), Key(.simple("+")), Key(.simple("|"))],
+                [Key(.simple("—")), Key(.simple("@")), Key(.simple("_")), Key(.simple("[")), Key(.simple("…")), Key(.simple("^")), Key(.simple("]")), period, comma, Key(.enter)],
+                [Key(.globe), Key(.layerSwitch(.alpha)), Key(.shift, doubleTapBehavior: .capsLock), Key(.backspace, longPressBehavior: .repeating), Key(.space), Key(.layerSwitch(.number))],
             ]
         case .number:
             return [
-                [.empty, .simple("6"), .simple("5"), .simple("4"), .empty, .layoutSwitch(.qwerty), .empty, .empty, .empty, apostrophe],
-                [.empty, .simple("3"), .simple("2"), .simple("1"), .simple("0"), .empty, .empty, .empty, .empty, .empty],
-                [.empty, .simple("9"), .simple("8"), .simple("7"), .empty, .empty, .empty, period, comma, .enter],
-                [.globe, .layerSwitch(.alpha), .shift, .backspace, .space, .layerSwitch(.symbol)],
+                [Key(.empty), Key(.simple("6")), Key(.simple("5")), Key(.simple("4")), Key(.empty), Key(.layoutSwitch(.qwerty)), Key(.empty), Key(.empty), Key(.empty), apostrophe],
+                [Key(.empty), Key(.simple("3")), Key(.simple("2")), Key(.simple("1")), Key(.simple("0")), Key(.empty), Key(.empty), Key(.empty), Key(.empty), Key(.empty)],
+                [Key(.empty), Key(.simple("9")), Key(.simple("8")), Key(.simple("7")), Key(.empty), Key(.empty), Key(.empty), period, comma, Key(.enter)],
+                [Key(.globe), Key(.layerSwitch(.alpha)), Key(.shift, doubleTapBehavior: .capsLock), Key(.backspace, longPressBehavior: .repeating), Key(.space), Key(.layerSwitch(.symbol))],
             ]
         }
     }
 
-    private func qwertyRows(for layer: Layer, shifted: Bool) -> [[KeyType]] {
-        let apostrophe: KeyType = shifted ? .simple("\"") : .simple("'")
-        let period: KeyType = shifted ? .simple("!") : .simple(".")
-        let comma: KeyType = shifted ? .simple("?") : .simple(",")
-
+    private func qwertyRows(for layer: Layer, shifted: Bool) -> [[Key]] {
         switch layer {
         case .alpha:
             if shifted {
                 return [
-                    [.simple("Q"), .simple("W"), .simple("E"), .simple("R"), .simple("T"), .simple("Y"), .simple("U"), .simple("I"), .simple("O"), .simple("P")],
-                    [.simple("A"), .simple("S"), .simple("D"), .simple("F"), .simple("G"), .simple("H"), .simple("J"), .simple("K"), .simple("L")],
-                    [.shift, .simple("Z"), .simple("X"), .simple("C"), .simple("V"), .simple("B"), .simple("N"), .simple("M"), .backspace],
-                    [.layerSwitch(.number), .layoutSwitch(.canary), .globe, .space, .enter],
+                    [Key(.simple("Q")), Key(.simple("W")), Key(.simple("E")), Key(.simple("R")), Key(.simple("T")), Key(.simple("Y")), Key(.simple("U")), Key(.simple("I")), Key(.simple("O")), Key(.simple("P"))],
+                    [Key(.simple("A")), Key(.simple("S")), Key(.simple("D")), Key(.simple("F")), Key(.simple("G")), Key(.simple("H")), Key(.simple("J")), Key(.simple("K")), Key(.simple("L"))],
+                    [Key(.shift, doubleTapBehavior: .capsLock), Key(.simple("Z")), Key(.simple("X")), Key(.simple("C")), Key(.simple("V")), Key(.simple("B")), Key(.simple("N")), Key(.simple("M")), Key(.backspace, longPressBehavior: .repeating)],
+                    [Key(.layerSwitch(.number)), Key(.layoutSwitch(.canary)), Key(.globe), Key(.space), Key(.enter)],
                 ]
             } else {
                 return [
-                    [.simple("q"), .simple("w"), .simple("e"), .simple("r"), .simple("t"), .simple("y"), .simple("u"), .simple("i"), .simple("o"), .simple("p")],
-                    [.simple("a"), .simple("s"), .simple("d"), .simple("f"), .simple("g"), .simple("h"), .simple("j"), .simple("k"), .simple("l")],
-                    [.shift, .simple("z"), .simple("x"), .simple("c"), .simple("v"), .simple("b"), .simple("n"), .simple("m"), .backspace],
-                    [.layerSwitch(.number), .layoutSwitch(.canary), .globe, .space, .enter],
+                    [Key(.simple("q")), Key(.simple("w")), Key(.simple("e")), Key(.simple("r")), Key(.simple("t")), Key(.simple("y")), Key(.simple("u")), Key(.simple("i")), Key(.simple("o")), Key(.simple("p"))],
+                    [Key(.simple("a")), Key(.simple("s")), Key(.simple("d")), Key(.simple("f")), Key(.simple("g")), Key(.simple("h")), Key(.simple("j")), Key(.simple("k")), Key(.simple("l"))],
+                    [Key(.shift, doubleTapBehavior: .capsLock), Key(.simple("z")), Key(.simple("x")), Key(.simple("c")), Key(.simple("v")), Key(.simple("b")), Key(.simple("n")), Key(.simple("m")), Key(.backspace, longPressBehavior: .repeating)],
+                    [Key(.layerSwitch(.number)), Key(.layoutSwitch(.canary)), Key(.globe), Key(.space), Key(.enter)],
                 ]
             }
         case .symbol:
             return [
-                [.simple("["), .simple("]"), .simple("{"), .simple("}"), .simple("#"), .simple("%"), .simple("^"), .simple("*"), .simple("+"), .simple("=")],
-                [.simple("_"), .simple("\\"), .simple("|"), .simple("~"), .simple("<"), .simple(">"), .simple("€"), .simple("£"), .simple("¥"), .simple("·")],
-                [.layerSwitch(.number), .simple("."), .simple(","), .simple("?"), .simple("!"), .simple("'"), .backspace],
-                [.layerSwitch(.alpha), .layoutSwitch(.canary), .globe, .space, .enter],
+                [Key(.simple("[")), Key(.simple("]")), Key(.simple("{")), Key(.simple("}")), Key(.simple("#")), Key(.simple("%")), Key(.simple("^")), Key(.simple("*")), Key(.simple("+")), Key(.simple("="))],
+                [Key(.simple("_")), Key(.simple("\\")), Key(.simple("|")), Key(.simple("~")), Key(.simple("<")), Key(.simple(">")), Key(.simple("€")), Key(.simple("£")), Key(.simple("¥")), Key(.simple("·"))],
+                [Key(.layerSwitch(.number)), Key(.simple(".")), Key(.simple(",")), Key(.simple("?")), Key(.simple("!")), Key(.simple("'")), Key(.backspace, longPressBehavior: .repeating)],
+                [Key(.layerSwitch(.alpha)), Key(.layoutSwitch(.canary)), Key(.globe), Key(.space), Key(.enter)],
             ]
         case .number:
             return [
-                [.simple("1"), .simple("2"), .simple("3"), .simple("4"), .simple("5"), .simple("6"), .simple("7"), .simple("8"), .simple("9"), .simple("0")],
-                [.simple("-"), .simple("/"), .simple(":"), .simple(";"), .simple("("), .simple(")"), .simple("$"), .simple("&"), .simple("@"), .simple("\"")],
-                [.layerSwitch(.symbol), .simple("."), .simple(","), .simple("?"), .simple("!"), .simple("'"), .backspace],
-                [.layerSwitch(.alpha), .layoutSwitch(.canary), .globe, .space, .enter],
+                [Key(.simple("1")), Key(.simple("2")), Key(.simple("3")), Key(.simple("4")), Key(.simple("5")), Key(.simple("6")), Key(.simple("7")), Key(.simple("8")), Key(.simple("9")), Key(.simple("0"))],
+                [Key(.simple("-")), Key(.simple("/")), Key(.simple(":")), Key(.simple(";")), Key(.simple("(")), Key(.simple(")")), Key(.simple("$")), Key(.simple("&")), Key(.simple("@")), Key(.simple("\""))],
+                [Key(.layerSwitch(.symbol)), Key(.simple(".")), Key(.simple(",")), Key(.simple("?")), Key(.simple("!")), Key(.simple("'")), Key(.backspace, longPressBehavior: .repeating)],
+                [Key(.layerSwitch(.alpha)), Key(.layoutSwitch(.canary)), Key(.globe), Key(.space), Key(.enter)],
             ]
         }
     }
@@ -138,10 +162,10 @@ enum KeyboardLayout: Equatable {
         let allNodeRows = keyRows.enumerated().map { rowIndex, row in
             var nodeRow: [Node] = []
 
-            for (keyIndex, keyType) in row.enumerated() {
+            for (keyIndex, key) in row.enumerated() {
                 // Add the key with Canary-specific sizing
                 let keyWidth: CGFloat
-                switch keyType {
+                switch key.keyType {
                 case .space:
                     keyWidth = layout.alphaKeyWidth * 2 + layout.horizontalGap
                 case .layerSwitch, .shift, .backspace:
@@ -150,7 +174,7 @@ enum KeyboardLayout: Equatable {
                 case .simple, .enter, .layoutSwitch, .globe, .empty:
                     keyWidth = layout.alphaKeyWidth
                 }
-                nodeRow.append(.key(keyType, keyWidth))
+                nodeRow.append(.key(key, keyWidth))
 
                 // Add split gap in middle
                 let splitAfterIndex: Int
@@ -229,11 +253,11 @@ enum KeyboardLayout: Equatable {
         let bottomRow = KeyboardLayout.qwerty.rows(for: .alpha, shifted: false, needsGlobe: needsGlobe)[3]
         let availableWidth = qwertyStandardRowWidth(layout, needsGlobe: needsGlobe)
 
-        let otherKeysWidth: CGFloat = bottomRow.compactMap { keyType -> CGFloat? in
-            if case .space = keyType {
+        let otherKeysWidth: CGFloat = bottomRow.compactMap { key -> CGFloat? in
+            if case .space = key.keyType {
                 return nil
             }
-            return qwertyKeyWidth(for: keyType, rowIndex: 3, layer: .alpha, layout: layout, needsGlobe: needsGlobe)
+            return qwertyKeyWidth(for: key, rowIndex: 3, layer: .alpha, layout: layout, needsGlobe: needsGlobe)
         }.reduce(0.0, +)
 
         let gapsWidth = layout.horizontalGap * CGFloat(bottomRow.count - 1)
@@ -242,8 +266,8 @@ enum KeyboardLayout: Equatable {
         return spaceWidth
     }
 
-    private func qwertyKeyWidth(for keyType: KeyType, rowIndex: Int, layer: Layer, layout: DeviceLayout, needsGlobe: Bool) -> CGFloat {
-        switch keyType {
+    private func qwertyKeyWidth(for key: Key, rowIndex: Int, layer: Layer, layout: DeviceLayout, needsGlobe: Bool) -> CGFloat {
+        switch key.keyType {
         case .space:
             return qwertySpaceKeyWidth(layout, needsGlobe: needsGlobe)
         case .enter:
@@ -265,10 +289,10 @@ enum KeyboardLayout: Equatable {
         return keyRows.enumerated().map { rowIndex, row in
             var nodeRow: [Node] = []
 
-            for (keyIndex, keyType) in row.enumerated() {
+            for (keyIndex, key) in row.enumerated() {
                 // Add the key with QWERTY-specific sizing
-                let keyWidth = qwertyKeyWidth(for: keyType, rowIndex: rowIndex, layer: layer, layout: layout, needsGlobe: needsGlobe)
-                nodeRow.append(.key(keyType, keyWidth))
+                let keyWidth = qwertyKeyWidth(for: key, rowIndex: rowIndex, layer: layer, layout: layout, needsGlobe: needsGlobe)
+                nodeRow.append(.key(key, keyWidth))
 
                 // Add gap after key (except last key)
                 if keyIndex < row.count - 1 {
