@@ -81,30 +81,33 @@ class KeyboardViewController: UIInputViewController {
         }
         let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: isShifted, layout: keyboardLayout, needsGlobe: needsGlobe)
 
-        view.addSubview(keyboardTouchView)
+        // Disable implicit animations during initial keyboard setup to prevent keys sliding in from corners
+        UIView.performWithoutAnimation {
+            view.addSubview(keyboardTouchView)
 
-        keyboardTouchView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            keyboardTouchView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            keyboardTouchView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            keyboardTouchView.topAnchor.constraint(equalTo: view.topAnchor),
-            keyboardTouchView.heightAnchor.constraint(equalToConstant: calculatedHeight)
-        ])
+            keyboardTouchView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                keyboardTouchView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                keyboardTouchView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                keyboardTouchView.topAnchor.constraint(equalTo: view.topAnchor),
+                keyboardTouchView.heightAnchor.constraint(equalToConstant: calculatedHeight)
+            ])
 
-        // Set explicit height constraint for the main view
-        heightConstraint = NSLayoutConstraint(
-            item: view,
-            attribute: .height,
-            relatedBy: .equal,
-            toItem: nil,
-            attribute: .notAnAttribute,
-            multiplier: 1.0,
-            constant: calculatedHeight
-        )
-        heightConstraint?.priority = UILayoutPriority(999)
-        view.addConstraint(heightConstraint!)
+            // Set explicit height constraint for the main view
+            heightConstraint = NSLayoutConstraint(
+                item: view,
+                attribute: .height,
+                relatedBy: .equal,
+                toItem: nil,
+                attribute: .notAnAttribute,
+                multiplier: 1.0,
+                constant: calculatedHeight
+            )
+            heightConstraint?.priority = UILayoutPriority(999)
+            view.addConstraint(heightConstraint!)
 
-        setupDismissButton()
+            setupDismissButton()
+        }
     }
 
     private func createKeyData() -> [KeyData] {
@@ -312,19 +315,21 @@ class KeyboardViewController: UIInputViewController {
 
         dismissButton.addTarget(self, action: #selector(handleDismissButton), for: .touchUpInside)
 
-        view.addSubview(dismissButton)
-        dismissButton.translatesAutoresizingMaskIntoConstraints = false
+        UIView.performWithoutAnimation {
+            view.addSubview(dismissButton)
+            dismissButton.translatesAutoresizingMaskIntoConstraints = false
 
-        // Position the button flush right above the apostrophe key
-        let apostropheX = calculateApostropheKeyX()
-        let buttonSize: CGFloat = 24
+            // Position the button flush right above the apostrophe key
+            let apostropheX = calculateApostropheKeyX()
+            let buttonSize: CGFloat = 24
 
-        NSLayoutConstraint.activate([
-            dismissButton.widthAnchor.constraint(equalToConstant: buttonSize),
-            dismissButton.heightAnchor.constraint(equalToConstant: buttonSize),
-            dismissButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -(view.bounds.width - apostropheX - deviceLayout.alphaKeyWidth)),
-            dismissButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 12)
-        ])
+            NSLayoutConstraint.activate([
+                dismissButton.widthAnchor.constraint(equalToConstant: buttonSize),
+                dismissButton.heightAnchor.constraint(equalToConstant: buttonSize),
+                dismissButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -(view.bounds.width - apostropheX - deviceLayout.alphaKeyWidth)),
+                dismissButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 12)
+            ])
+        }
     }
 
     private func calculateApostropheKeyX() -> CGFloat {
@@ -372,9 +377,11 @@ class KeyboardViewController: UIInputViewController {
 
     private func rebuildKeyboard() {
         stopKeyRepeat()
-        view.subviews.forEach { $0.removeFromSuperview() }
-        keyPopouts.removeAll()
-        setupKeyboard()
+        UIView.performWithoutAnimation {
+            view.subviews.forEach { $0.removeFromSuperview() }
+            keyPopouts.removeAll()
+            setupKeyboard()
+        }
     }
 
     private func showKeyPopout(for keyData: KeyData) {
