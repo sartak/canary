@@ -53,6 +53,7 @@ class KeyboardViewController: UIInputViewController {
         keyboardTouchView = KeyboardTouchView()
         keyboardTouchView.backgroundColor = UIColor.clear
         keyboardTouchView.currentShiftState = currentShiftState
+        keyboardTouchView.deviceLayout = deviceLayout
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
 
@@ -310,7 +311,7 @@ class KeyboardViewController: UIInputViewController {
         dismissButton.tintColor = theme.decorationColor
 
         // Create downward chevron using SF Symbols
-        let chevronConfig = UIImage.SymbolConfiguration(pointSize: 16, weight: .light)
+        let chevronConfig = UIImage.SymbolConfiguration(pointSize: deviceLayout.chevronSize, weight: .light, scale: .default)
         let chevronImage = UIImage(systemName: "chevron.down", withConfiguration: chevronConfig)
         dismissButton.setImage(chevronImage, for: .normal)
 

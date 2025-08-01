@@ -7,7 +7,7 @@
 
 import UIKit
 
-private let popoutFontSize: CGFloat = 44
+private let basePopoutFontSize: CGFloat = 44
 
 class KeyPopoutView {
 
@@ -26,6 +26,7 @@ class KeyPopoutView {
 
         let popoutTopWidth = basePopoutTopWidth * widthScale
         let popoutHeight = basePopoutHeight * heightScale
+        let popoutFontSize = basePopoutFontSize * widthScale
         let keyWidth = keyData.frame.width
 
         let popout = UIView()

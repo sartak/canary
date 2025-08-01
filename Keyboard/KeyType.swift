@@ -170,6 +170,22 @@ enum KeyType: Equatable {
         }
     }
 
+    func fontSize(deviceLayout: DeviceLayout) -> CGFloat {
+        switch self {
+        case .simple, .space, .empty:
+            return deviceLayout.regularFontSize
+        case .backspace, .shift, .enter:
+            return deviceLayout.specialFontSize
+        case .globe:
+            return deviceLayout.smallFontSize
+        case .layerSwitch:
+            let labelLength = self.label(shiftState: .unshifted).count
+            return labelLength > 1 ? deviceLayout.smallFontSize : deviceLayout.specialFontSize
+        case .layoutSwitch:
+            return deviceLayout.smallFontSize
+        }
+    }
+
     func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void) {
         // Handle the key action
         switch self {

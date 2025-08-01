@@ -16,6 +16,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         }
     }
     var currentShiftState: ShiftState = .unshifted
+    var deviceLayout: DeviceLayout!
     var keysWithPopouts: Set<Int> = []
     var onKeyTouchDown: ((KeyData) -> Void)? {
         didSet {
@@ -142,7 +143,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
 
             // Draw key shadow (only for visible keys, not when pressed)
             if !isPressed && key.keyType != .empty {
-                let shadowPath = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
+                let shadowPath = UIBezierPath(roundedRect: key.frame, cornerRadius: deviceLayout.cornerRadius)
                 let context = UIGraphicsGetCurrentContext()
                 context?.saveGState()
                 context?.setShadow(offset: theme.keyShadowOffset, blur: theme.keyShadowRadius, color: theme.keyShadowColor.cgColor)
@@ -152,7 +153,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             }
 
             // Draw rounded key background
-            let path = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
+            let path = UIBezierPath(roundedRect: key.frame, cornerRadius: deviceLayout.cornerRadius)
             let color = if isPressed {
                 key.keyType.tappedBackgroundColor(shiftState: currentShiftState, isLargeScreen: isLargeScreen, traitCollection: self.traitCollection)
             } else {
@@ -166,7 +167,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             if !shouldHideContent {
                 // Check if key should use SF Symbol
                 if let symbolName = key.keyType.sfSymbolName(shiftState: currentShiftState, pressed: isPressed) {
-                    let fontSize = key.keyType.fontSize()
+                    let fontSize = key.keyType.fontSize(deviceLayout: deviceLayout)
                     let symbolConfig = UIImage.SymbolConfiguration(pointSize: fontSize, weight: .light)
                     if let symbolImage = UIImage(systemName: symbolName, withConfiguration: symbolConfig) {
                         // Draw SF Symbol
@@ -195,7 +196,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
     private func drawKeyText(for key: KeyData, theme: ColorTheme) {
         let text = key.keyType.label(shiftState: currentShiftState)
         if !text.isEmpty {
-            let fontSize = key.keyType.fontSize()
+            let fontSize = key.keyType.fontSize(deviceLayout: deviceLayout)
             let font = UIFont.systemFont(ofSize: fontSize)
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: font,
