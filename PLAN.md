@@ -58,7 +58,7 @@
 - [x] Add key repeat for backspace (hold to continuously delete)
 - [x] Implement caps lock functionality (double-tap shift gesture)
 - [x] Remove incorrect animation when the keyboard initially launches
-- [ ] Improve layout for iPad (floating keyboard mode, corner radius, smaller gaps)
+- [x] Improve layout for iPad (floating keyboard mode, corner radius, smaller gaps)
 
 ## Milestone 5: Advanced Input
 **Goal**: Additional gesture-based input features
@@ -72,6 +72,7 @@
 ### Additional Gestures
 - [ ] Implement spacebar drag for cursor movement
 - [ ] Add context-aware key alternates (e.g., domain suffixes for email fields)
+- [ ] iPad: Add pinch to toggle floating keyboard
 
 ## Milestone 6: Copy/Paste Keys
 **Goal**: Add dedicated clipboard access keys

@@ -29,8 +29,34 @@ class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        needsGlobe = needsInputModeSwitchKey
-        setupKeyboard()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        let currentBounds = view.bounds
+        let screenBounds = UIScreen.main.bounds
+
+        // Always setup keyboard initially
+        if keyboardTouchView == nil {
+            needsGlobe = needsInputModeSwitchKey
+            setupKeyboard()
+
+            // If bounds seem wrong (full screen on iPad), schedule a rebuild
+            if currentBounds.width >= screenBounds.width * 0.95 && screenBounds.width > 1000 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if self.view.bounds != currentBounds {
+                        self.rebuildKeyboard()
+                    }
+                }
+            }
+        } else {
+            // Rebuild when bounds change
+            let lastWidth = keyboardTouchView.bounds.width
+            if abs(currentBounds.width - lastWidth) > 10 {
+                rebuildKeyboard()
+            }
+        }
     }
 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -44,7 +70,7 @@ class KeyboardViewController: UIInputViewController {
         let screenBounds = UIScreen.main.bounds
         let viewBounds = view.bounds
         let isLandscape = screenBounds.width > screenBounds.height
-
+        
         let effectiveWidth = viewBounds.width
         let effectiveHeight = isLandscape ? screenBounds.width : screenBounds.height
 
