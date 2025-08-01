@@ -7,6 +7,12 @@
 
 import UIKit
 
+enum ShiftState: Equatable {
+    case unshifted
+    case shifted
+    case capsLock
+}
+
 enum Layer: Equatable {
     case alpha
     case symbol
@@ -46,13 +52,18 @@ enum KeyType: Equatable {
     case globe
     case empty
 
-    func backgroundColor(shifted: Bool, traitCollection: UITraitCollection) -> UIColor {
+    func backgroundColor(shiftState: ShiftState, traitCollection: UITraitCollection) -> UIColor {
         let theme = ColorTheme.current(for: traitCollection)
         switch self {
         case .simple, .space:
             return theme.primaryKeyColor
         case .shift:
-            return shifted ? theme.primaryKeyColor : theme.secondaryKeyColor
+            switch shiftState {
+            case .unshifted:
+                return theme.secondaryKeyColor
+            case .shifted, .capsLock:
+                return theme.primaryKeyColor
+            }
         case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe:
             return theme.secondaryKeyColor
         case .empty:
@@ -60,7 +71,7 @@ enum KeyType: Equatable {
         }
     }
 
-    func tappedBackgroundColor(shifted: Bool, isLargeScreen: Bool, traitCollection: UITraitCollection) -> UIColor {
+    func tappedBackgroundColor(shiftState: ShiftState, isLargeScreen: Bool, traitCollection: UITraitCollection) -> UIColor {
         let theme = ColorTheme.current(for: traitCollection)
         switch self {
         case .simple:
@@ -68,7 +79,12 @@ enum KeyType: Equatable {
         case .space:
             return theme.secondaryKeyColor
         case .shift:
-            return shifted ? theme.secondaryKeyColor : theme.primaryKeyColor
+            switch shiftState {
+            case .unshifted:
+                return theme.primaryKeyColor
+            case .shifted, .capsLock:
+                return theme.secondaryKeyColor
+            }
         case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe:
             return theme.primaryKeyColor
         case .empty:
@@ -76,12 +92,19 @@ enum KeyType: Equatable {
         }
     }
 
-    func sfSymbolName(shifted: Bool = false, pressed: Bool = false) -> String? {
+    func sfSymbolName(shiftState: ShiftState = .unshifted, pressed: Bool = false) -> String? {
         switch self {
         case .globe:
             return "globe"
         case .shift:
-            return shifted ? "shift.fill" : "shift"
+            switch shiftState {
+            case .unshifted:
+                return "shift"
+            case .shifted:
+                return "shift.fill"
+            case .capsLock:
+                return "capslock.fill"
+            }
         case .backspace:
             return pressed ? "delete.backward.fill" : "delete.backward"
         default:
@@ -89,14 +112,21 @@ enum KeyType: Equatable {
         }
     }
 
-    func label(shifted: Bool) -> String {
+    func label(shiftState: ShiftState) -> String {
         switch self {
         case .simple(let char):
             return String(char)
         case .backspace:
             return "⌫" // Fallback if SF Symbol rendering fails
         case .shift:
-            return shifted ? "⬆︎" : "⇧" // Fallback if SF Symbol rendering fails
+            switch shiftState {
+            case .unshifted:
+                return "⇧" // Fallback if SF Symbol rendering fails
+            case .shifted:
+                return "⬆︎" // Fallback if SF Symbol rendering fails
+            case .capsLock:
+                return "⇪" // Fallback if SF Symbol rendering fails
+            }
         case .enter:
             return "↩︎"
         case .space:
@@ -133,7 +163,7 @@ enum KeyType: Equatable {
         case .globe:
             return 12
         case .layerSwitch:
-            let labelLength = self.label(shifted: false).count
+            let labelLength = self.label(shiftState: .unshifted).count
             return labelLength > 1 ? 12 : 16
         case .layoutSwitch:
             return 12

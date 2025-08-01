@@ -11,7 +11,7 @@ private let popoutFontSize: CGFloat = 44
 
 class KeyPopoutView {
 
-    static func createPopout(for keyData: KeyData, shifted: Bool, containerView: UIView, traitCollection: UITraitCollection) -> UIView {
+    static func createPopout(for keyData: KeyData, shiftState: ShiftState, containerView: UIView, traitCollection: UITraitCollection) -> UIView {
         // Scale popout size based on device layout like keys
         let basePopoutTopWidth: CGFloat = 45
         let basePopoutHeight: CGFloat = 55
@@ -87,7 +87,7 @@ class KeyPopoutView {
         label.textAlignment = .center
 
         // Check if key should use SF Symbol
-        if let symbolName = keyData.keyType.sfSymbolName(shifted: shifted) {
+        if let symbolName = keyData.keyType.sfSymbolName(shiftState: shiftState) {
             let symbolConfig = UIImage.SymbolConfiguration(pointSize: popoutFontSize, weight: .light)
             if let symbolImage = UIImage(systemName: symbolName, withConfiguration: symbolConfig) {
                 // Use SF Symbol as image
@@ -104,7 +104,7 @@ class KeyPopoutView {
                 ])
             } else {
                 // Fallback to text if SF Symbol fails
-                label.text = keyData.keyType.label(shifted: shifted)
+                label.text = keyData.keyType.label(shiftState: shiftState)
                 label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
 
                 popout.addSubview(label)
@@ -116,7 +116,7 @@ class KeyPopoutView {
             }
         } else {
             // Use regular text
-            label.text = keyData.keyType.label(shifted: shifted)
+            label.text = keyData.keyType.label(shiftState: shiftState)
             label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
 
             popout.addSubview(label)

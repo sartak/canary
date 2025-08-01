@@ -15,7 +15,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             gestureRecognizer?.keyData = keyData
         }
     }
-    var currentShifted: Bool = false
+    var currentShiftState: ShiftState = .unshifted
     var keysWithPopouts: Set<Int> = []
     var onKeyTouchDown: ((KeyData) -> Void)? {
         didSet {
@@ -32,9 +32,13 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             gestureRecognizer?.onKeyLongPress = onKeyLongPress
         }
     }
+    var onShiftDoubleTap: ((KeyData) -> Void)?
 
     // Multi-touch gesture recognizer
-    private var gestureRecognizer: MultiTouchKeyboardGestureRecognizer!
+    private(set) var gestureRecognizer: MultiTouchKeyboardGestureRecognizer!
+
+    // Double-tap gesture recognizer for shift key
+    private var shiftDoubleTapRecognizer: UITapGestureRecognizer?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -54,6 +58,9 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         gestureRecognizer = MultiTouchKeyboardGestureRecognizer(target: self, action: #selector(handleGesture(_:)))
         gestureRecognizer.delegate = self
         addGestureRecognizer(gestureRecognizer)
+
+        // Create double-tap recognizer once
+        setupShiftDoubleTapGestureRecognizer()
     }
 
     @objc private func handleGesture(_ recognizer: MultiTouchKeyboardGestureRecognizer) {
@@ -61,11 +68,64 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         // This method exists to satisfy the target-action pattern but doesn't need implementation
     }
 
+    private func setupShiftDoubleTapGestureRecognizer() {
+        // Create double-tap recognizer for shift key once
+        let doubleTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleShiftDoubleTap(_:)))
+        doubleTapRecognizer.numberOfTapsRequired = 2
+        doubleTapRecognizer.numberOfTouchesRequired = 1
+        doubleTapRecognizer.delegate = self
+
+        // Make the multi-touch recognizer wait for double-tap to fail
+        gestureRecognizer.require(toFail: doubleTapRecognizer)
+
+        addGestureRecognizer(doubleTapRecognizer)
+        shiftDoubleTapRecognizer = doubleTapRecognizer
+    }
+
+    @objc private func handleShiftDoubleTap(_ recognizer: UITapGestureRecognizer) {
+        let location = recognizer.location(in: self)
+
+        // Find which key was double-tapped
+        guard let tappedKey = keyData.first(where: { $0.frame.contains(location) }) else {
+            return
+        }
+
+        // Verify it's the shift key
+        if case .shift = tappedKey.keyType {
+            onShiftDoubleTap?(tappedKey)
+        }
+    }
+
+
     // MARK: - UIGestureRecognizerDelegate
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        // Allow our custom gesture recognizer to work simultaneously with other recognizers
-        return gestureRecognizer is MultiTouchKeyboardGestureRecognizer
+        // Don't allow simultaneous recognition between tap gestures and multi-touch gestures
+        // This prevents conflicts between single-tap and double-tap detection
+        if gestureRecognizer is UITapGestureRecognizer && otherGestureRecognizer is MultiTouchKeyboardGestureRecognizer {
+            return false
+        }
+        if gestureRecognizer is MultiTouchKeyboardGestureRecognizer && otherGestureRecognizer is UITapGestureRecognizer {
+            return false
+        }
+
+        return true
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        let location = touch.location(in: self)
+
+        if gestureRecognizer is UITapGestureRecognizer {
+            // Only allow double-tap recognizer to receive touches on the shift key
+            return keyData.contains { keyData in
+                if case .shift = keyData.keyType {
+                    return keyData.frame.contains(location)
+                }
+                return false
+            }
+        }
+
+        return true
     }
 
 
@@ -94,9 +154,9 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             // Draw rounded key background
             let path = UIBezierPath(roundedRect: key.frame, cornerRadius: 5)
             let color = if isPressed {
-                key.keyType.tappedBackgroundColor(shifted: currentShifted, isLargeScreen: isLargeScreen, traitCollection: self.traitCollection)
+                key.keyType.tappedBackgroundColor(shiftState: currentShiftState, isLargeScreen: isLargeScreen, traitCollection: self.traitCollection)
             } else {
-                key.keyType.backgroundColor(shifted: currentShifted, traitCollection: self.traitCollection)
+                key.keyType.backgroundColor(shiftState: currentShiftState, traitCollection: self.traitCollection)
             }
             color.setFill()
             path.fill()
@@ -105,7 +165,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             let shouldHideContent = keysWithPopouts.contains(key.index)
             if !shouldHideContent {
                 // Check if key should use SF Symbol
-                if let symbolName = key.keyType.sfSymbolName(shifted: currentShifted, pressed: isPressed) {
+                if let symbolName = key.keyType.sfSymbolName(shiftState: currentShiftState, pressed: isPressed) {
                     let fontSize = key.keyType.fontSize()
                     let symbolConfig = UIImage.SymbolConfiguration(pointSize: fontSize, weight: .light)
                     if let symbolImage = UIImage(systemName: symbolName, withConfiguration: symbolConfig) {
@@ -133,7 +193,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
     }
 
     private func drawKeyText(for key: KeyData, theme: ColorTheme) {
-        let text = key.keyType.label(shifted: currentShifted)
+        let text = key.keyType.label(shiftState: currentShiftState)
         if !text.isEmpty {
             let fontSize = key.keyType.fontSize()
             let font = UIFont.systemFont(ofSize: fontSize)

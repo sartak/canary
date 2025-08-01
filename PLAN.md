@@ -56,7 +56,7 @@
 - [x] Support light and dark mode
 - [x] Add keyboard dismiss button using dismissKeyboard()
 - [x] Add key repeat for backspace (hold to continuously delete)
-- [ ] Implement caps lock functionality (double-tap shift or dedicated key)
+- [x] Implement caps lock functionality (double-tap shift gesture)
 - [ ] Remove incorrect animation when the keyboard initially launches
 - [ ] Improve layout for iPad (floating keyboard mode, corner radius, smaller gaps)
 

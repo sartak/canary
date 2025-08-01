@@ -11,7 +11,7 @@ private let largeScreenWidth: CGFloat = 600
 
 class KeyboardViewController: UIInputViewController {
     private var currentLayer: Layer = .alpha
-    private var currentShifted: Bool = false
+    private var currentShiftState: ShiftState = .unshifted
     private var keyboardTouchView: KeyboardTouchView!
     private var deviceLayout: DeviceLayout!
     private var heightConstraint: NSLayoutConstraint?
@@ -51,7 +51,7 @@ class KeyboardViewController: UIInputViewController {
 
         keyboardTouchView = KeyboardTouchView()
         keyboardTouchView.backgroundColor = UIColor.clear
-        keyboardTouchView.currentShifted = currentShifted
+        keyboardTouchView.currentShiftState = currentShiftState
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
 
@@ -67,8 +67,19 @@ class KeyboardViewController: UIInputViewController {
             self?.handleKeyLongPress(keyData)
         }
 
+        keyboardTouchView.onShiftDoubleTap = { [weak self] keyData in
+            self?.handleShiftDoubleTap(keyData)
+        }
+
         // Calculate keyboard height first
-        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: currentShifted, layout: keyboardLayout, needsGlobe: needsGlobe)
+        let isShifted: Bool
+        switch currentShiftState {
+        case .unshifted:
+            isShifted = false
+        case .shifted, .capsLock:
+            isShifted = true
+        }
+        let calculatedHeight = deviceLayout.totalKeyboardHeight(for: currentLayer, shifted: isShifted, layout: keyboardLayout, needsGlobe: needsGlobe)
 
         view.addSubview(keyboardTouchView)
 
@@ -100,7 +111,14 @@ class KeyboardViewController: UIInputViewController {
         var keys: [KeyData] = []
         var yOffset: CGFloat = deviceLayout.topPadding
 
-        for (rowIndex, row) in keyboardLayout.nodeRows(for: currentLayer, shifted: currentShifted, layout: deviceLayout, needsGlobe: needsGlobe).enumerated() {
+        let isShifted: Bool
+        switch currentShiftState {
+        case .unshifted:
+            isShifted = false
+        case .shifted, .capsLock:
+            isShifted = true
+        }
+        for (rowIndex, row) in keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe).enumerated() {
             let rowKeys = createRowKeyData(for: row, rowIndex: rowIndex, yOffset: yOffset, startingIndex: keys.count)
             keys.append(contentsOf: rowKeys)
             yOffset += deviceLayout.keyHeight + deviceLayout.verticalGap
@@ -192,6 +210,17 @@ class KeyboardViewController: UIInputViewController {
         }
     }
 
+    private func handleShiftDoubleTap(_ keyData: KeyData) {
+        switch currentShiftState {
+        case .unshifted, .shifted:
+            currentShiftState = .capsLock
+        case .capsLock:
+            currentShiftState = .unshifted
+        }
+
+        updateKeyboardForShiftChange()
+    }
+
     private func startKeyRepeat(for keyData: KeyData) {
         currentlyRepeatingKey = keyData
 
@@ -233,14 +262,28 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func toggleShift() {
-        currentShifted.toggle()
-        rebuildKeyboard()
+        switch currentShiftState {
+        case .unshifted:
+            currentShiftState = .shifted
+        case .shifted:
+            currentShiftState = .unshifted
+        case .capsLock:
+            currentShiftState = .unshifted
+        }
+
+        updateKeyboardForShiftChange()
     }
 
     private func autoUnshift() {
-        if currentShifted {
-            currentShifted = false
-            rebuildKeyboard()
+        switch currentShiftState {
+        case .unshifted:
+            break
+        case .shifted:
+            currentShiftState = .unshifted
+            updateKeyboardForShiftChange()
+        case .capsLock:
+            // Caps lock should not auto-unshift
+            break
         }
     }
 
@@ -286,7 +329,14 @@ class KeyboardViewController: UIInputViewController {
 
     private func calculateApostropheKeyX() -> CGFloat {
         let containerWidth = view.bounds.width
-        let firstRow = keyboardLayout.nodeRows(for: currentLayer, shifted: currentShifted, layout: deviceLayout, needsGlobe: needsGlobe)[0]
+        let isShifted: Bool
+        switch currentShiftState {
+        case .unshifted:
+            isShifted = false
+        case .shifted, .capsLock:
+            isShifted = true
+        }
+        let firstRow = keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe)[0]
         let rowWidth = Node.calculateRowWidth(for: firstRow)
         let rowStartX = (containerWidth - rowWidth) / 2
 
@@ -313,6 +363,13 @@ class KeyboardViewController: UIInputViewController {
         dismissKeyboard()
     }
 
+    private func updateKeyboardForShiftChange() {
+        // Update display state and key data - gesture recognizer persists now
+        keyboardTouchView.currentShiftState = currentShiftState
+        keyboardTouchView.keyData = createKeyData()
+        keyboardTouchView.setNeedsDisplay()
+    }
+
     private func rebuildKeyboard() {
         stopKeyRepeat()
         view.subviews.forEach { $0.removeFromSuperview() }
@@ -321,7 +378,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func showKeyPopout(for keyData: KeyData) {
-        let popout = KeyPopoutView.createPopout(for: keyData, shifted: currentShifted, containerView: view, traitCollection: traitCollection)
+        let popout = KeyPopoutView.createPopout(for: keyData, shiftState: currentShiftState, containerView: view, traitCollection: traitCollection)
         view.addSubview(popout)
         keyPopouts[keyData.index] = popout
     }
