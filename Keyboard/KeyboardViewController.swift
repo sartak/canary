@@ -70,7 +70,7 @@ class KeyboardViewController: UIInputViewController {
         let screenBounds = UIScreen.main.bounds
         let viewBounds = view.bounds
         let isLandscape = screenBounds.width > screenBounds.height
-        
+
         let effectiveWidth = viewBounds.width
         let effectiveHeight = isLandscape ? screenBounds.width : screenBounds.height
 
@@ -95,8 +95,8 @@ class KeyboardViewController: UIInputViewController {
             self?.handleKeyLongPress(keyData)
         }
 
-        keyboardTouchView.onShiftDoubleTap = { [weak self] keyData in
-            self?.handleShiftDoubleTap(keyData)
+        keyboardTouchView.onKeyDoubleTap = { [weak self] keyData in
+            self?.handleKeyDoubleTap(keyData)
         }
 
         // Calculate keyboard height first
@@ -167,12 +167,12 @@ class KeyboardViewController: UIInputViewController {
 
         for node in row {
             switch node {
-            case .key(let keyType, let keyWidth):
+            case .key(let key, let keyWidth):
                 let frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: deviceLayout.keyHeight)
                 let isLargeScreen = view.bounds.width > largeScreenWidth
                 let keyData = KeyData(
                     index: startingIndex + keys.count,
-                    keyType: keyType,
+                    key: key,
                     frame: frame
                 )
                 keys.append(keyData)
@@ -195,10 +195,10 @@ class KeyboardViewController: UIInputViewController {
         keyboardTouchView.setNeedsDisplay()
 
         // Provide haptic feedback for key press
-        HapticFeedback.shared.keyPress(for: keyData.keyType, hasFullAccess: hasFullAccess)
+        HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
 
         let isLargeScreen = view.bounds.width > largeScreenWidth
-        if case .simple = keyData.keyType, !isLargeScreen {
+        if case .simple = keyData.key.keyType, !isLargeScreen {
             keyboardTouchView.keysWithPopouts.insert(keyData.index)
             showKeyPopout(for: keyData)
         }
@@ -215,41 +215,34 @@ class KeyboardViewController: UIInputViewController {
 
         // Handle the key tap (only if it wasn't a long press that triggered repeat)
         if currentlyRepeatingKey == nil || currentlyRepeatingKey?.index != keyData.index {
-            keyData.keyType.didTap(textDocumentProxy: textDocumentProxy,
-                                  layerSwitchHandler: { [weak self] newLayer in
-                                      self?.switchToLayer(newLayer)
-                                  },
-                                  layoutSwitchHandler: { [weak self] newLayout in
-                                      self?.switchToLayout(newLayout)
-                                  },
-                                  shiftHandler: { [weak self] in
-                                      self?.toggleShift()
-                                  },
-                                  autoUnshiftHandler: { [weak self] in
-                                      self?.autoUnshift()
-                                  },
-                                  globeHandler: { [weak self] in
-                                      self?.advanceToNextInputMode()
-                                  })
+            performKeyAction(keyData)
         }
     }
 
     private func handleKeyLongPress(_ keyData: KeyData) {
-        // Only start key repeat for backspace
-        if case .backspace = keyData.keyType {
-            startKeyRepeat(for: keyData)
+        // Check the key's long press behavior
+        if let behavior = keyData.key.longPressBehavior {
+            switch behavior {
+            case .repeating:
+                startKeyRepeat(for: keyData)
+            }
         }
     }
 
-    private func handleShiftDoubleTap(_ keyData: KeyData) {
-        switch currentShiftState {
-        case .unshifted, .shifted:
-            currentShiftState = .capsLock
-        case .capsLock:
-            currentShiftState = .unshifted
-        }
+    private func handleKeyDoubleTap(_ keyData: KeyData) {
+        guard let doubleTapBehavior = keyData.key.doubleTapBehavior else { return }
 
-        updateKeyboardForShiftChange()
+        switch doubleTapBehavior {
+        case .capsLock:
+            switch currentShiftState {
+            case .unshifted, .shifted:
+                currentShiftState = .capsLock
+            case .capsLock:
+                currentShiftState = .unshifted
+            }
+
+            updateKeyboardForShiftChange()
+        }
     }
 
     private func startKeyRepeat(for keyData: KeyData) {
@@ -271,7 +264,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func performKeyAction(_ keyData: KeyData) {
-        keyData.keyType.didTap(textDocumentProxy: textDocumentProxy,
+        keyData.key.didTap(textDocumentProxy: textDocumentProxy,
                               layerSwitchHandler: { [weak self] newLayer in
                                   self?.switchToLayer(newLayer)
                               },
@@ -289,7 +282,7 @@ class KeyboardViewController: UIInputViewController {
                               })
 
         // Provide haptic feedback for each repeat
-        HapticFeedback.shared.keyPress(for: keyData.keyType, hasFullAccess: hasFullAccess)
+        HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
     }
 
     private func toggleShift() {

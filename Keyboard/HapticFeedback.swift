@@ -25,53 +25,43 @@ class HapticFeedback {
         // We'll prepare them only when hasFullAccess is true
     }
 
-    func keyPress(for keyType: KeyType, hasFullAccess: Bool) {
+    func keyPress(for key: Key, hasFullAccess: Bool) {
         guard KeyboardPreferences.shared.hapticFeedbackEnabled else { return }
 
         if hasFullAccess && isAvailable {
-            useRichHapticFeedback(for: keyType)
+            useRichHapticFeedback(for: key)
         } else {
-            useSystemSoundFeedback(for: keyType)
+            useSystemSoundFeedback(for: key)
         }
     }
 
-    private func useRichHapticFeedback(for keyType: KeyType) {
+    private func useRichHapticFeedback(for key: Key) {
         // Prepare generators for better performance
         subtleImpact.prepare()
         lightImpact.prepare()
         selectionFeedback.prepare()
 
-        switch keyType {
-        case .simple:
-            // Very subtle haptic for regular character keys
+        switch key.feedbackPattern() {
+        case .subtle:
             subtleImpact.impactOccurred()
-        case .space, .enter:
-            // Light haptic for important action keys (reduced from medium)
+        case .light:
             lightImpact.impactOccurred()
-        case .backspace:
-            // Selection haptic for delete actions
+        case .selection:
             selectionFeedback.selectionChanged()
-        case .shift, .layerSwitch, .layoutSwitch:
-            // Very subtle haptic for modifier keys
-            subtleImpact.impactOccurred()
-        case .globe:
-            // No haptic for globe to reduce overall feedback
-            break
-        case .empty:
-            // No haptic for empty keys
+        case .none:
             break
         }
     }
 
-    private func useSystemSoundFeedback(for keyType: KeyType) {
-        switch keyType {
-        case .simple, .space, .enter, .shift, .layerSwitch, .layoutSwitch:
+    private func useSystemSoundFeedback(for key: Key) {
+        switch key.feedbackPattern() {
+        case .subtle, .light:
             // Standard keyboard click sound
             AudioServicesPlaySystemSound(1104) // kSystemSoundID_Keyboard
-        case .backspace, .globe:
+        case .selection:
             // Different sound for delete actions
             AudioServicesPlaySystemSound(1155) // kSystemSoundID_DeleteKey
-        case .empty:
+        case .none:
             // No sound for empty keys
             break
         }
