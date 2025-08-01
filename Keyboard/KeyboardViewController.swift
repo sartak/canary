@@ -8,6 +8,7 @@
 import UIKit
 
 private let largeScreenWidth: CGFloat = 600
+private let dismissButtonSize: CGFloat = 24
 
 class KeyboardViewController: UIInputViewController {
     private var currentLayer: Layer = .alpha
@@ -319,20 +320,19 @@ class KeyboardViewController: UIInputViewController {
             view.addSubview(dismissButton)
             dismissButton.translatesAutoresizingMaskIntoConstraints = false
 
-            // Position the button flush right above the apostrophe key
-            let apostropheX = calculateApostropheKeyX()
-            let buttonSize: CGFloat = 24
+            // Position the button appropriately for each layout
+            let rightOffset = calculateDismissButtonOffset()
 
             NSLayoutConstraint.activate([
-                dismissButton.widthAnchor.constraint(equalToConstant: buttonSize),
-                dismissButton.heightAnchor.constraint(equalToConstant: buttonSize),
-                dismissButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -(view.bounds.width - apostropheX - deviceLayout.alphaKeyWidth)),
+                dismissButton.widthAnchor.constraint(equalToConstant: dismissButtonSize),
+                dismissButton.heightAnchor.constraint(equalToConstant: dismissButtonSize),
+                dismissButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -rightOffset),
                 dismissButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 12)
             ])
         }
     }
 
-    private func calculateApostropheKeyX() -> CGFloat {
+    private func calculateDismissButtonOffset() -> CGFloat {
         let containerWidth = view.bounds.width
         let isShifted: Bool
         switch currentShiftState {
@@ -345,13 +345,16 @@ class KeyboardViewController: UIInputViewController {
         let rowWidth = Node.calculateRowWidth(for: firstRow)
         let rowStartX = (containerWidth - rowWidth) / 2
 
+        // Find the rightmost key in the first row
+        var rightmostKeyX: CGFloat = 0
+        var rightmostKeyWidth: CGFloat = 0
         var xOffset = rowStartX
+
         for node in firstRow {
             switch node {
-            case .key(let keyType, let keyWidth):
-                if case .simple(let char) = keyType, char == "'" || char == "\"" {
-                    return xOffset
-                }
+            case .key(_, let keyWidth):
+                rightmostKeyX = xOffset
+                rightmostKeyWidth = keyWidth
                 xOffset += keyWidth
             case .gap(let gapWidth):
                 xOffset += gapWidth
@@ -360,8 +363,9 @@ class KeyboardViewController: UIInputViewController {
             }
         }
 
-        // Fallback: position at the right edge
-        return containerWidth - deviceLayout.alphaKeyWidth
+        // Center the dismiss button above the rightmost key
+        let rightmostKeyCenterX = rightmostKeyX + rightmostKeyWidth / 2
+        return containerWidth - rightmostKeyCenterX - dismissButtonSize / 2
     }
 
     @objc private func handleDismissButton() {
