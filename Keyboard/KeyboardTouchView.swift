@@ -222,28 +222,29 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             // Draw key content (hide if this key has a popout showing)
             let shouldHideContent = keysWithPopouts.contains(key.index)
             if !shouldHideContent {
-                // Check if key should use SF Symbol
-                if let symbolName = key.key.sfSymbolName(shiftState: currentShiftState, pressed: isPressed) {
-                    let fontSize = key.key.fontSize(deviceLayout: deviceLayout)
-                    let symbolConfig = UIImage.SymbolConfiguration(pointSize: fontSize, weight: .light)
-                    if let symbolImage = UIImage(systemName: symbolName, withConfiguration: symbolConfig) {
-                        // Draw SF Symbol
-                        let imageSize = symbolImage.size
-                        let imageRect = CGRect(
-                            x: key.frame.midX - imageSize.width / 2,
-                            y: key.frame.midY - imageSize.height / 2,
-                            width: imageSize.width,
-                            height: imageSize.height
-                        )
+                let fontSize = key.key.fontSize(deviceLayout: deviceLayout)
 
-                        // Tint the symbol with the text color
-                        symbolImage.withTintColor(theme.textColor, renderingMode: .alwaysOriginal).draw(in: imageRect)
-                    } else {
-                        // Fallback to text if SF Symbol fails to load
-                        drawKeyText(for: key, theme: theme)
-                    }
+                // Try to render SF Symbol first
+                if let symbolView = SFSymbolRenderer.render(
+                    for: key.key,
+                    shiftState: currentShiftState,
+                    fontSize: fontSize,
+                    theme: theme,
+                    pressed: isPressed
+                ) as? UIImageView {
+                    // Draw SF Symbol
+                    let symbolImage = symbolView.image!
+                    let imageSize = symbolImage.size
+                    let imageRect = CGRect(
+                        x: key.frame.midX - imageSize.width / 2,
+                        y: key.frame.midY - imageSize.height / 2,
+                        width: imageSize.width,
+                        height: imageSize.height
+                    )
+
+                    symbolImage.draw(in: imageRect)
                 } else {
-                    // Draw regular text
+                    // Fallback to text
                     drawKeyText(for: key, theme: theme)
                 }
             }

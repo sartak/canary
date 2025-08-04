@@ -31,48 +31,29 @@ class KeyPopoutView {
 
         popout.layer.addSublayer(shapeLayer)
 
-        let label = UILabel()
-        label.textColor = theme.textColor
-        label.textAlignment = .center
+        // Create content view using shared renderer
+        let contentView = SFSymbolRenderer.createContentView(
+            for: keyData.key,
+            shiftState: shiftState,
+            fontSize: popoutFontSize,
+            theme: theme
+        )
 
-        // Check if key should use SF Symbol
-        if let symbolName = keyData.key.sfSymbolName(shiftState: shiftState) {
-            let symbolConfig = UIImage.SymbolConfiguration(pointSize: popoutFontSize, weight: .light)
-            if let symbolImage = UIImage(systemName: symbolName, withConfiguration: symbolConfig) {
-                // Use SF Symbol as image
-                let imageView = UIImageView(image: symbolImage.withTintColor(theme.textColor, renderingMode: .alwaysOriginal))
-                imageView.contentMode = .scaleAspectFit
+        popout.addSubview(contentView)
+        contentView.translatesAutoresizingMaskIntoConstraints = false
 
-                popout.addSubview(imageView)
-                imageView.translatesAutoresizingMaskIntoConstraints = false
-                NSLayoutConstraint.activate([
-                    imageView.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
-                    imageView.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * deviceLayout.popoutTextVerticalRatio),
-                    imageView.widthAnchor.constraint(equalToConstant: popoutFontSize),
-                    imageView.heightAnchor.constraint(equalToConstant: popoutFontSize)
-                ])
-            } else {
-                // Fallback to text if SF Symbol fails
-                label.text = keyData.key.label(shiftState: shiftState)
-                label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
-
-                popout.addSubview(label)
-                label.translatesAutoresizingMaskIntoConstraints = false
-                NSLayoutConstraint.activate([
-                    label.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
-                    label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * deviceLayout.popoutTextVerticalRatio)
-                ])
-            }
-        } else {
-            // Use regular text
-            label.text = keyData.key.label(shiftState: shiftState)
-            label.font = UIFont.systemFont(ofSize: popoutFontSize, weight: .regular)
-
-            popout.addSubview(label)
-            label.translatesAutoresizingMaskIntoConstraints = false
+        // Set up constraints based on content type
+        if contentView is UIImageView {
             NSLayoutConstraint.activate([
-                label.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
-                label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * deviceLayout.popoutTextVerticalRatio)
+                contentView.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
+                contentView.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * deviceLayout.popoutTextVerticalRatio),
+                contentView.widthAnchor.constraint(equalToConstant: popoutFontSize),
+                contentView.heightAnchor.constraint(equalToConstant: popoutFontSize)
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                contentView.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
+                contentView.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * deviceLayout.popoutTextVerticalRatio)
             ])
         }
 
