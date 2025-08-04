@@ -12,6 +12,10 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
     var onKeyTouchDown: ((KeyData) -> Void)?
     var onKeyTouchUp: ((KeyData) -> Void)?
     var onKeyLongPress: ((KeyData) -> Void)?
+    var onAlternatesShow: ((KeyData, [String]) -> Void)?
+    var onAlternatesMove: ((CGPoint) -> Void)?
+    var onAlternatesSelect: (() -> Void)?
+    var onAlternatesDismiss: (() -> Void)?
 
     // Multi-touch support - same as original implementation
     private var touchQueue: [(UITouch, KeyData)] = []
@@ -21,6 +25,10 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
     private var longPressTimers: [UITouch: Timer] = [:]
     private var longPressTriggered: Set<UITouch> = []
     private let longPressDelay: TimeInterval = 0.5
+
+    // Alternates support
+    private var alternatesActiveTouch: UITouch? = nil
+    private var alternatesActiveKey: KeyData? = nil
 
     var pressedKeyIndices: Set<Int> {
         return pressedKeys
@@ -42,6 +50,11 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
         super.touchesBegan(touches, with: event)
 
         for touch in touches {
+            // Ignore new touches while alternates are active
+            if alternatesActiveTouch != nil {
+                continue
+            }
+
             let location = touch.location(in: view)
 
             if let key = keyData.first(where: { $0.frame.contains(location) }) {
@@ -58,12 +71,34 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
         state = .began
     }
 
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesMoved(touches, with: event)
+
+        // Handle alternates movement
+        if let activeTouch = alternatesActiveTouch, touches.contains(activeTouch) {
+            let location = activeTouch.location(in: view)
+            onAlternatesMove?(location)
+        }
+    }
+
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesEnded(touches, with: event)
 
         for touch in touches {
-            cancelLongPressTimer(for: touch)
-            processQueueUpToTouch(touch)
+            // Handle alternates selection
+            if touch == alternatesActiveTouch {
+                onAlternatesSelect?()
+                alternatesActiveTouch = nil
+                alternatesActiveKey = nil
+                // Remove this touch from the queue since it was consumed by alternates selection
+                if let touchIndex = touchQueue.firstIndex(where: { $0.0 === touch }) {
+                    let (_, key) = touchQueue.remove(at: touchIndex)
+                    pressedKeys.remove(key.index)
+                }
+            } else {
+                cancelLongPressTimer(for: touch)
+                processQueueUpToTouch(touch)
+            }
         }
 
         // Update gesture state based on remaining touches
@@ -78,8 +113,15 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
         super.touchesCancelled(touches, with: event)
 
         for touch in touches {
-            cancelLongPressTimer(for: touch)
-            processQueueUpToTouch(touch)
+            // Handle alternates cancellation
+            if touch == alternatesActiveTouch {
+                onAlternatesDismiss?()
+                alternatesActiveTouch = nil
+                alternatesActiveKey = nil
+            } else {
+                cancelLongPressTimer(for: touch)
+                processQueueUpToTouch(touch)
+            }
         }
 
         // Update gesture state
@@ -110,6 +152,13 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
         touchQueue.removeAll()
         pressedKeys.removeAll()
         cancelAllLongPressTimers()
+
+        // Clear alternates state
+        if alternatesActiveTouch != nil {
+            onAlternatesDismiss?()
+            alternatesActiveTouch = nil
+            alternatesActiveKey = nil
+        }
     }
 
     // MARK: - Long Press Support
@@ -137,6 +186,22 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
 
     private func handleLongPress(for touch: UITouch, key: KeyData) {
         longPressTriggered.insert(touch)
-        onKeyLongPress?(key)
+
+        // Check if key has alternates
+        if case .alternates(let alternates) = key.key.longPressBehavior {
+            // Add the original key character to the alternates list
+            var alternatesWithOriginal = alternates
+            if case .simple(let originalChar) = key.key.keyType {
+                alternatesWithOriginal.insert(originalChar, at: 0) // Put original first
+            }
+
+            // Show alternates popup
+            alternatesActiveTouch = touch
+            alternatesActiveKey = key
+            onAlternatesShow?(key, alternatesWithOriginal)
+        } else {
+            // Regular long press behavior
+            onKeyLongPress?(key)
+        }
     }
 }

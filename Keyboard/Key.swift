@@ -17,6 +17,11 @@ enum RepeatingBehavior: Equatable {
     case repeating
 }
 
+enum LongPressBehavior: Equatable {
+    case repeating
+    case alternates([String])
+}
+
 enum DoubleTapBehavior: Equatable {
     case capsLock
 }

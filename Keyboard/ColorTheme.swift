@@ -80,4 +80,8 @@ enum ColorTheme {
             return .black
         }
     }
+
+    var selectionColor: UIColor {
+        return UIColor.systemBlue
+    }
 }

@@ -65,9 +65,9 @@
 
 ### Hold Gesture System
 - [x] Implement long-press gesture recognition
-- [ ] Create popup menu system for alternates
-- [ ] Define alternate character mappings
-- [ ] Add touch-and-drag selection in popups
+- [x] Create popup menu system for alternates
+- [x] Define alternate character mappings
+- [x] Add touch-and-drag selection in popups
 
 ### Additional Gestures
 - [ ] Implement spacebar drag for cursor movement
