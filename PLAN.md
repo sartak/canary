@@ -70,7 +70,6 @@
 - [x] Add touch-and-drag selection in popups
 
 ### Additional Gestures
-- [ ] Implement spacebar drag for cursor movement
 - [ ] Add context-aware key alternates (e.g., domain suffixes for email fields)
 - [ ] iPad: Add pinch to toggle floating keyboard
 

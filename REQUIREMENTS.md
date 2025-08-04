@@ -25,7 +25,6 @@
 - **Adaptive Hitboxes**: Adjust key touch areas based on likely next letters
 - **Swipe-to-Type**: Full word prediction from continuous gesture paths across letters
 - **Hold for Alternates**: Long-press any key to access accent marks and alternative characters
-- **Spacebar Gestures**: Drag on spacebar to move text cursor for precise editing
 - **Context Adaptation**: Adapt keyboard layout and suggestions based on UIKeyboardType traits
 - **Text Input Traits**: Respond to UITextInputTraits properties (autocapitalization, autocorrection, smart quotes, etc.)
 - **Key Repeat**: Hold backspace to continuously delete characters

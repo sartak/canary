@@ -18,7 +18,6 @@ A custom iOS keyboard extension implementing the Canary layout with advanced inp
 - **Text Expansion**: Custom shortcuts that expand to frequently used phrases
 - **Smart Backspace**: Deletes by context - single characters, complete words, or prediction completions
 - **Auto-Correction**: Automatic typo correction and capitalization like standard iOS keyboards
-- **Spacebar Cursor Control**: Drag on spacebar to move text cursor for precise text editing
 
 ### Smart Predictions
 - **Word Completion**: Intelligent word suggestions based on context and typing patterns
