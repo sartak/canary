@@ -34,9 +34,14 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         }
     }
     var onKeyDoubleTap: ((KeyData) -> Void)?
+    var onAlternateSelected: ((String, KeyData) -> Void)?
 
     // Multi-touch gesture recognizer
     private(set) var gestureRecognizer: MultiTouchKeyboardGestureRecognizer!
+
+    // Alternates popup
+    private var alternatesPopup: AlternatesPopoutView?
+    private var alternatesActiveTouchIndex: Int?
 
     // Double-tap gesture recognizer for keys with double-tap behavior
     private var doubleTapRecognizer: UITapGestureRecognizer?
@@ -95,6 +100,62 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         if tappedKey.key.doubleTapBehavior != nil {
             onKeyDoubleTap?(tappedKey)
         }
+    }
+
+    // MARK: - Alternates Popup
+
+    func showAlternatesPopup(for keyData: KeyData, alternates: [String]) {
+        dismissAlternatesPopup()
+
+        // Skip existing popout removal to prevent race condition crash
+        // The existing popout will be cleaned up when the view is redrawn
+
+        guard let superview = self.superview else { return }
+
+        let popup = AlternatesPopoutView(
+            keyData: keyData,
+            alternates: alternates,
+            containerView: superview,
+            deviceLayout: deviceLayout,
+            onAlternateSelected: { [weak self] alternate in
+                self?.onAlternateSelected?(alternate, keyData)
+                self?.dismissAlternatesPopup()
+            },
+            onDismiss: { [weak self] in
+                self?.dismissAlternatesPopup()
+            }
+        )
+
+        superview.addSubview(popup)
+        alternatesPopup = popup
+        alternatesActiveTouchIndex = keyData.index
+
+        // Hide the original key content while popup is showing
+        keysWithPopouts.insert(keyData.index)
+        setNeedsDisplay()
+    }
+
+    func updateAlternatesSelection(at point: CGPoint) {
+        alternatesPopup?.updateSelection(at: point)
+    }
+
+    func selectCurrentAlternate() {
+        alternatesPopup?.selectCurrentAlternate()
+    }
+
+    func dismissAlternatesPopup() {
+        if let index = alternatesActiveTouchIndex {
+            keysWithPopouts.remove(index)
+        }
+
+        alternatesPopup?.removeFromSuperview()
+        alternatesPopup = nil
+        alternatesActiveTouchIndex = nil
+        setNeedsDisplay()
+    }
+
+    func hasActiveAlternatesPopup() -> Bool {
+        return alternatesPopup != nil
     }
 
 

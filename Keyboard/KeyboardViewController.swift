@@ -99,6 +99,27 @@ class KeyboardViewController: UIInputViewController {
             self?.handleKeyDoubleTap(keyData)
         }
 
+        keyboardTouchView.onAlternateSelected = { [weak self] alternate, keyData in
+            self?.handleAlternateSelected(alternate, from: keyData)
+        }
+
+        // Set up alternates callbacks on the gesture recognizer
+        keyboardTouchView.gestureRecognizer.onAlternatesShow = { [weak self] keyData, alternates in
+            self?.showAlternatesPopup(for: keyData, alternates: alternates)
+        }
+
+        keyboardTouchView.gestureRecognizer.onAlternatesMove = { [weak self] point in
+            self?.keyboardTouchView.updateAlternatesSelection(at: point)
+        }
+
+        keyboardTouchView.gestureRecognizer.onAlternatesSelect = { [weak self] in
+            self?.keyboardTouchView.selectCurrentAlternate()
+        }
+
+        keyboardTouchView.gestureRecognizer.onAlternatesDismiss = { [weak self] in
+            self?.keyboardTouchView.dismissAlternatesPopup()
+        }
+
         // Calculate keyboard height first
         let isShifted: Bool
         switch currentShiftState {
@@ -225,8 +246,22 @@ class KeyboardViewController: UIInputViewController {
             switch behavior {
             case .repeating:
                 startKeyRepeat(for: keyData)
+            case .alternates:
+                // Alternates are handled by the gesture recognizer
+                break
             }
         }
+    }
+
+    private func handleAlternateSelected(_ alternate: String, from keyData: KeyData) {
+        // Insert the selected alternate character
+        textDocumentProxy.insertText(alternate)
+
+        // Auto-unshift after inserting alternate
+        autoUnshift()
+
+        // Provide haptic feedback using the same system as regular key presses
+        HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
     }
 
     private func handleKeyDoubleTap(_ keyData: KeyData) {
@@ -409,9 +444,17 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func showKeyPopout(for keyData: KeyData) {
-        let popout = KeyPopoutView.createPopout(for: keyData, shiftState: currentShiftState, containerView: view, traitCollection: traitCollection)
+        let popout = KeyPopoutView.createPopout(for: keyData, shiftState: currentShiftState, containerView: view, traitCollection: traitCollection, deviceLayout: deviceLayout)
         view.addSubview(popout)
         keyPopouts[keyData.index] = popout
+    }
+
+    private func showAlternatesPopup(for keyData: KeyData, alternates: [String]) {
+        // Hide any existing popout for this key
+        hideKeyPopout(for: keyData)
+
+        // Show the alternates popup via the touch view
+        keyboardTouchView.showAlternatesPopup(for: keyData, alternates: alternates)
     }
 
     private func hideKeyPopout(for keyData: KeyData) {

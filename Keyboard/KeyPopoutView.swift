@@ -7,80 +7,28 @@
 
 import UIKit
 
-private let basePopoutFontSize: CGFloat = 44
-
 class KeyPopoutView {
-
-    static func createPopout(for keyData: KeyData, shiftState: ShiftState, containerView: UIView, traitCollection: UITraitCollection) -> UIView {
-        // Scale popout size based on device layout like keys
-        let basePopoutTopWidth: CGFloat = 45
-        let basePopoutHeight: CGFloat = 55
-        let screenBounds = UIScreen.main.bounds
-        let isLandscape = screenBounds.width > screenBounds.height
-        let effectiveWidth = containerView.bounds.width
-        let effectiveHeight = isLandscape ? screenBounds.width : screenBounds.height
-        let referenceWidth: CGFloat = 402
-        let referenceHeight: CGFloat = 874
-        let widthScale = effectiveWidth / referenceWidth
-        let heightScale = effectiveHeight / referenceHeight
-
-        let popoutTopWidth = basePopoutTopWidth * widthScale
-        let popoutHeight = basePopoutHeight * heightScale
-        let popoutFontSize = basePopoutFontSize * widthScale
+    static func createPopout(for keyData: KeyData, shiftState: ShiftState, containerView: UIView, traitCollection: UITraitCollection, deviceLayout: DeviceLayout) -> UIView {
+        let popoutTopWidth = deviceLayout.popoutBaseWidth
+        let popoutHeight = deviceLayout.popoutHeight
+        let popoutFontSize = deviceLayout.popoutFontSize
         let keyWidth = keyData.frame.width
 
         let popout = UIView()
         popout.backgroundColor = .clear
         popout.isUserInteractionEnabled = false
 
-        // Create funnel shape using CAShapeLayer
-        let shapeLayer = CAShapeLayer()
-        let path = UIBezierPath()
-
-        // Start from top-left of rounded rectangle
-        path.move(to: CGPoint(x: 5, y: 0))
-        path.addLine(to: CGPoint(x: popoutTopWidth - 5, y: 0))
-        path.addQuadCurve(to: CGPoint(x: popoutTopWidth, y: 5), controlPoint: CGPoint(x: popoutTopWidth, y: 0))
-        path.addLine(to: CGPoint(x: popoutTopWidth, y: popoutHeight - 15))
-
-        // Funnel down to key width with curves
-        let funnelStartX = max(0, (popoutTopWidth - keyWidth) / 2)
-        let funnelEndX = popoutTopWidth - funnelStartX
-        let controlY = popoutHeight - 5
-        let controlInset: CGFloat = 8
-
-        path.addQuadCurve(to: CGPoint(x: funnelEndX, y: popoutHeight),
-                         controlPoint: CGPoint(x: popoutTopWidth - controlInset, y: controlY))
-        path.addLine(to: CGPoint(x: funnelStartX, y: popoutHeight))
-        path.addQuadCurve(to: CGPoint(x: 0, y: popoutHeight - 15),
-                         controlPoint: CGPoint(x: controlInset, y: controlY))
-
-        // Left side of rounded rectangle
-        path.addLine(to: CGPoint(x: 0, y: 5))
-        path.addQuadCurve(to: CGPoint(x: 5, y: 0), controlPoint: CGPoint(x: 0, y: 0))
-        path.close()
-
+        // Create popout shape using shared renderer
         let theme = ColorTheme.current(for: traitCollection)
-        shapeLayer.path = path.cgPath
-        shapeLayer.fillColor = theme.primaryKeyColor.cgColor
-        shapeLayer.shadowColor = theme.shadowColor.cgColor
-        shapeLayer.shadowOffset = CGSize(width: 0, height: 1)
-        shapeLayer.shadowOpacity = 0.25
-        shapeLayer.shadowRadius = 3
+        let shapeLayer = PopoutView.createShape(
+            totalWidth: popoutTopWidth,
+            height: popoutHeight,
+            keyWidth: keyWidth,
+            deviceLayout: deviceLayout,
+            theme: theme,
+            funnelSide: .left
+        )
 
-        // Create shadow path for top three edges only
-        let shadowPath = UIBezierPath()
-        shadowPath.move(to: CGPoint(x: 5, y: 0))
-        shadowPath.addLine(to: CGPoint(x: popoutTopWidth - 5, y: 0))
-        shadowPath.addQuadCurve(to: CGPoint(x: popoutTopWidth, y: 5), controlPoint: CGPoint(x: popoutTopWidth, y: 0))
-        shadowPath.addLine(to: CGPoint(x: popoutTopWidth, y: popoutHeight - 15))
-        shadowPath.addQuadCurve(to: CGPoint(x: 0, y: popoutHeight - 15),
-                               controlPoint: CGPoint(x: popoutTopWidth / 2, y: controlY))
-        shadowPath.addLine(to: CGPoint(x: 0, y: 5))
-        shadowPath.addQuadCurve(to: CGPoint(x: 5, y: 0), controlPoint: CGPoint(x: 0, y: 0))
-        shadowPath.close()
-
-        shapeLayer.shadowPath = shadowPath.cgPath
         popout.layer.addSublayer(shapeLayer)
 
         let label = UILabel()
@@ -99,7 +47,7 @@ class KeyPopoutView {
                 imageView.translatesAutoresizingMaskIntoConstraints = false
                 NSLayoutConstraint.activate([
                     imageView.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
-                    imageView.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * 0.35),
+                    imageView.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * deviceLayout.popoutTextVerticalRatio),
                     imageView.widthAnchor.constraint(equalToConstant: popoutFontSize),
                     imageView.heightAnchor.constraint(equalToConstant: popoutFontSize)
                 ])
@@ -112,7 +60,7 @@ class KeyPopoutView {
                 label.translatesAutoresizingMaskIntoConstraints = false
                 NSLayoutConstraint.activate([
                     label.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
-                    label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * 0.35)
+                    label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * deviceLayout.popoutTextVerticalRatio)
                 ])
             }
         } else {
@@ -124,7 +72,7 @@ class KeyPopoutView {
             label.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([
                 label.centerXAnchor.constraint(equalTo: popout.centerXAnchor),
-                label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * 0.35)
+                label.centerYAnchor.constraint(equalTo: popout.topAnchor, constant: popoutHeight * deviceLayout.popoutTextVerticalRatio)
             ])
         }
 
@@ -134,7 +82,7 @@ class KeyPopoutView {
 
         popout.frame = CGRect(
             x: popoutX,
-            y: keyCenter.y - popoutHeight - 10,
+            y: keyCenter.y - popoutHeight - deviceLayout.popupToKeyOffset,
             width: popoutTopWidth,
             height: popoutHeight
         )
