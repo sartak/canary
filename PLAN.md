@@ -70,7 +70,6 @@
 - [x] Add touch-and-drag selection in popups
 
 ### Additional Gestures
-- [ ] Add context-aware key alternates (e.g., domain suffixes for email fields)
 - [ ] iPad: Add pinch to toggle floating keyboard
 
 ## Milestone 6: Copy/Paste Keys
@@ -123,6 +122,9 @@
 - [ ] Add automatic expansion when shortcuts are typed
 - [ ] Create UI for managing custom shortcuts in main app
 - [ ] Use shared container to pass settings between app and keyboard extension
+
+### Context-Aware Features
+- [ ] Add context-aware key alternates (e.g., domain suffixes for email fields)
 
 ## Milestone 11: Cross-Device Sync
 **Goal**: Sync settings and learned vocabulary across devices
