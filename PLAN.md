@@ -69,9 +69,6 @@
 - [x] Define alternate character mappings
 - [x] Add touch-and-drag selection in popups
 
-### Additional Gestures
-- [ ] iPad: Add pinch to toggle floating keyboard
-
 ## Milestone 6: Copy/Paste Keys
 **Goal**: Add dedicated clipboard access keys
 
