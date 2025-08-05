@@ -84,4 +84,12 @@ enum ColorTheme {
     var selectionColor: UIColor {
         return UIColor.systemBlue
     }
+
+    var predictionTextColor: UIColor {
+        return textColor.withAlphaComponent(0.7)
+    }
+
+    var predictionDividerColor: UIColor {
+        return textColor.withAlphaComponent(0.1)
+    }
 }

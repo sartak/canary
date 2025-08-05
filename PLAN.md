@@ -80,13 +80,15 @@
 **Goal**: Add word suggestions using iOS text prediction APIs
 
 ### Prediction Integration
+- [x] Create suggestion bar above keyboard
+- [x] Implement suggestion selection and insertion
 - [ ] Integrate with iOS UITextChecker and prediction APIs
 - [ ] Access UILexicon for user's personal dictionary and learned words
-- [ ] Create suggestion bar above keyboard
-- [ ] Implement suggestion selection and insertion
-- [ ] Implement smart backspace (context-aware deletion)
 - [ ] Add enhanced auto-correction with prediction integration
 - [ ] Respect UITextInputTraits settings (autocapitalization, autocorrection preferences)
+
+### Context-Aware Tuning
+- [ ] Implement smart backspace (context-aware deletion)
 - [ ] Adjust key touch areas based on next letter probability
 
 ## Milestone 8: Swipe-to-Type Foundation

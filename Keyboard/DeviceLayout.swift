@@ -15,12 +15,14 @@ struct DeviceLayout {
     let splitWidth: CGFloat
     let topPadding: CGFloat
     let bottomPadding: CGFloat
+    let predictionGap: CGFloat
     let cornerRadius: CGFloat
     let editingButtonSize: CGFloat
     let editingButtonSpacing: CGFloat
     let regularFontSize: CGFloat
     let specialFontSize: CGFloat
     let smallFontSize: CGFloat
+    let predictionFontSize: CGFloat
 
     // Popup-related sizes
     let popoutFontSize: CGFloat
@@ -49,6 +51,7 @@ struct DeviceLayout {
         let baseSplitWidth: CGFloat = 16
         let baseTopPadding: CGFloat = 48
         let baseBottomPadding: CGFloat = baseVerticalGap / 2
+        let basePredictionGap: CGFloat = 12
         let baseCornerRadius: CGFloat = 5
         let baseEditingButtonSize: CGFloat = 16
         let baseEditingButtonSpacing: CGFloat = 8
@@ -83,12 +86,14 @@ struct DeviceLayout {
             splitWidth: baseSplitWidth * widthScale,
             topPadding: baseTopPadding * topPaddingScale,
             bottomPadding: baseBottomPadding * heightScale,
+            predictionGap: basePredictionGap * widthScale,
             cornerRadius: baseCornerRadius * cornerRadiusScale,
             editingButtonSize: baseEditingButtonSize * specialFontScale,
             editingButtonSpacing: baseEditingButtonSpacing * gapScale,
             regularFontSize: baseRegularFontSize * regularFontScale,
             specialFontSize: baseSpecialFontSize * specialFontScale,
             smallFontSize: baseSmallFontSize * specialFontScale,
+            predictionFontSize: baseSmallFontSize * specialFontScale,
 
             // Popup values with appropriate scaling
             popoutFontSize: basePopoutFontSize * widthScale,
