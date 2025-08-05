@@ -20,6 +20,9 @@ class KeyboardViewController: UIInputViewController {
     private var needsGlobe: Bool = false
     private var keyPopouts: [Int: UIView] = [:]
     private var dismissButton: UIButton!
+    private var cutButton: UIButton!
+    private var copyButton: UIButton!
+    private var pasteButton: UIButton!
 
     // Key repeat support
     private var keyRepeatTimer: Timer?
@@ -156,6 +159,7 @@ class KeyboardViewController: UIInputViewController {
             view.addConstraint(heightConstraint!)
 
             setupDismissButton()
+            setupEditingButtons()
         }
     }
 
@@ -365,7 +369,7 @@ class KeyboardViewController: UIInputViewController {
         dismissButton.tintColor = theme.decorationColor
 
         // Create downward chevron using SF Symbols
-        let chevronConfig = UIImage.SymbolConfiguration(pointSize: deviceLayout.chevronSize, weight: .light, scale: .default)
+        let chevronConfig = UIImage.SymbolConfiguration(pointSize: deviceLayout.editingButtonSize, weight: .light, scale: .default)
         let chevronImage = UIImage(systemName: "chevron.down", withConfiguration: chevronConfig)
         dismissButton.setImage(chevronImage, for: .normal)
 
@@ -373,17 +377,14 @@ class KeyboardViewController: UIInputViewController {
 
         UIView.performWithoutAnimation {
             view.addSubview(dismissButton)
-            dismissButton.translatesAutoresizingMaskIntoConstraints = false
 
             // Position the button appropriately for each layout
+            let containerWidth = view.bounds.width
             let rightOffset = calculateDismissButtonOffset()
+            let buttonX = containerWidth - rightOffset - dismissButtonSize
+            let buttonY = (deviceLayout.topPadding - dismissButtonSize) / 2
 
-            NSLayoutConstraint.activate([
-                dismissButton.widthAnchor.constraint(equalToConstant: dismissButtonSize),
-                dismissButton.heightAnchor.constraint(equalToConstant: dismissButtonSize),
-                dismissButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -rightOffset),
-                dismissButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 12)
-            ])
+            dismissButton.frame = CGRect(x: buttonX, y: buttonY, width: dismissButtonSize, height: dismissButtonSize)
         }
     }
 
@@ -425,6 +426,79 @@ class KeyboardViewController: UIInputViewController {
 
     @objc private func handleDismissButton() {
         dismissKeyboard()
+    }
+
+    private func setupEditingButtons() {
+        let theme = ColorTheme.current(for: traitCollection)
+        let buttonConfig = UIImage.SymbolConfiguration(pointSize: deviceLayout.editingButtonSize, weight: .light, scale: .default)
+
+        // Create cut button
+        cutButton = UIButton(type: .system)
+        cutButton.tintColor = theme.decorationColor
+        let cutImage = UIImage(systemName: "scissors", withConfiguration: buttonConfig)
+        cutButton.setImage(cutImage, for: .normal)
+        cutButton.addTarget(self, action: #selector(handleCutButton), for: .touchUpInside)
+
+        // Create copy button
+        copyButton = UIButton(type: .system)
+        copyButton.tintColor = theme.decorationColor
+        let copyImage = UIImage(systemName: "doc.on.doc", withConfiguration: buttonConfig)
+        copyButton.setImage(copyImage, for: .normal)
+        copyButton.addTarget(self, action: #selector(handleCopyButton), for: .touchUpInside)
+
+        // Create paste button
+        pasteButton = UIButton(type: .system)
+        pasteButton.tintColor = theme.decorationColor
+        let pasteImage = UIImage(systemName: "doc.on.clipboard", withConfiguration: buttonConfig)
+        pasteButton.setImage(pasteImage, for: .normal)
+        pasteButton.addTarget(self, action: #selector(handlePasteButton), for: .touchUpInside)
+
+        UIView.performWithoutAnimation {
+            view.addSubview(cutButton)
+            view.addSubview(copyButton)
+            view.addSubview(pasteButton)
+
+            // Calculate button positions explicitly
+            let containerWidth = view.bounds.width
+            let dismissRightOffset = calculateDismissButtonOffset()
+            let buttonSpacing = deviceLayout.editingButtonSpacing
+            let buttonY = (deviceLayout.topPadding - dismissButtonSize) / 2
+            let buttonSize = dismissButtonSize
+
+            // Paste button (leftmost of the three)
+            let pasteX = containerWidth - (dismissRightOffset + buttonSize + buttonSpacing + buttonSize)
+            pasteButton.frame = CGRect(x: pasteX, y: buttonY, width: buttonSize, height: buttonSize)
+
+            // Copy button (middle)
+            let copyX = pasteX - buttonSpacing - buttonSize
+            copyButton.frame = CGRect(x: copyX, y: buttonY, width: buttonSize, height: buttonSize)
+
+            // Cut button (leftmost)
+            let cutX = copyX - buttonSpacing - buttonSize
+            cutButton.frame = CGRect(x: cutX, y: buttonY, width: buttonSize, height: buttonSize)
+        }
+    }
+
+    @objc private func handleCutButton() {
+        // For cut: copy selected text then delete it
+        if let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty {
+            UIPasteboard.general.string = selectedText
+            textDocumentProxy.deleteBackward()
+        }
+    }
+
+    @objc private func handleCopyButton() {
+        // Copy selected text to pasteboard
+        if let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty {
+            UIPasteboard.general.string = selectedText
+        }
+    }
+
+    @objc private func handlePasteButton() {
+        // Paste text from pasteboard
+        if let pasteText = UIPasteboard.general.string {
+            textDocumentProxy.insertText(pasteText)
+        }
     }
 
     private func updateKeyboardForShiftChange() {
