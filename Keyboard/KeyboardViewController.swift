@@ -25,6 +25,7 @@ class KeyboardViewController: UIInputViewController {
     private var pasteButton: UIButton!
     private var predictionView: PredictionView!
     private var predictionService: PredictionService!
+    private var pendingRefresh = false
 
     // Key repeat support
     private var keyRepeatTimer: Timer?
@@ -325,6 +326,9 @@ class KeyboardViewController: UIInputViewController {
 
         // Provide haptic feedback for each repeat
         HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
+
+        // Refresh suggestions after our key action
+        refreshSuggestions()
     }
 
     private func toggleShift() {
@@ -514,9 +518,28 @@ class KeyboardViewController: UIInputViewController {
         predictionView.frame = CGRect(x: predictionX, y: buttonY, width: availableWidth, height: predictionHeight)
 
         // Update with initial suggestions
-        let suggestions = predictionService.getSuggestions()
-        predictionView.updateSuggestions(suggestions) { [weak self] selectedSuggestion in
-            self?.textDocumentProxy.insertText(selectedSuggestion)
+        refreshSuggestions()
+    }
+
+    private func refreshSuggestions() {
+        guard !pendingRefresh else { return }
+        pendingRefresh = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.pendingRefresh = false
+
+            let before = self.textDocumentProxy.documentContextBeforeInput
+            let after = self.textDocumentProxy.documentContextAfterInput
+            let selected = self.textDocumentProxy.selectedText
+
+            self.predictionService.updateContext(before: before, after: after, selected: selected)
+            let suggestions = self.predictionService.getSuggestions()
+
+            self.predictionView.updateSuggestions(suggestions) { [weak self] selectedSuggestion in
+                self?.textDocumentProxy.insertText(selectedSuggestion)
+                self?.refreshSuggestions()
+            }
         }
     }
 
@@ -525,6 +548,7 @@ class KeyboardViewController: UIInputViewController {
         if let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty {
             UIPasteboard.general.string = selectedText
             textDocumentProxy.deleteBackward()
+            refreshSuggestions()
         }
     }
 
@@ -539,6 +563,7 @@ class KeyboardViewController: UIInputViewController {
         // Paste text from pasteboard
         if let pasteText = UIPasteboard.general.string {
             textDocumentProxy.insertText(pasteText)
+            refreshSuggestions()
         }
     }
 
@@ -584,5 +609,17 @@ class KeyboardViewController: UIInputViewController {
         if traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle {
             keyboardTouchView?.setNeedsDisplay()
         }
+    }
+
+    // MARK: - UITextInputDelegate
+
+    override func textDidChange(_ textInput: UITextInput?) {
+        super.textDidChange(textInput)
+        refreshSuggestions()
+    }
+
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
+        refreshSuggestions()
     }
 }
