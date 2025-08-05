@@ -23,6 +23,8 @@ class KeyboardViewController: UIInputViewController {
     private var cutButton: UIButton!
     private var copyButton: UIButton!
     private var pasteButton: UIButton!
+    private var predictionView: PredictionView!
+    private var predictionService: PredictionService!
 
     // Key repeat support
     private var keyRepeatTimer: Timer?
@@ -160,6 +162,7 @@ class KeyboardViewController: UIInputViewController {
 
             setupDismissButton()
             setupEditingButtons()
+            setupPredictionView()
         }
     }
 
@@ -476,6 +479,44 @@ class KeyboardViewController: UIInputViewController {
             // Cut button (leftmost)
             let cutX = copyX - buttonSpacing - buttonSize
             cutButton.frame = CGRect(x: cutX, y: buttonY, width: buttonSize, height: buttonSize)
+        }
+    }
+
+    private func setupPredictionView() {
+        predictionService = PredictionService()
+        predictionView = PredictionView(deviceLayout: deviceLayout)
+
+        view.addSubview(predictionView)
+
+        // Position the prediction view at the same vertical level as editing buttons
+        let buttonY = (deviceLayout.topPadding - dismissButtonSize) / 2
+        let predictionHeight = dismissButtonSize
+
+        // Calculate available space for predictions (left side of editing buttons)
+        let containerWidth = view.bounds.width
+        let dismissRightOffset = calculateDismissButtonOffset()
+        let editingButtonsWidth = dismissButtonSize * 4 + deviceLayout.editingButtonSpacing * 3 // 4 buttons + 3 gaps
+
+        // Align with the left edge of the first column of keys
+        let isShifted: Bool
+        switch currentShiftState {
+        case .unshifted:
+            isShifted = false
+        case .shifted, .capsLock:
+            isShifted = true
+        }
+        let firstRow = keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe)[0]
+        let rowWidth = Node.calculateRowWidth(for: firstRow)
+        let predictionX = (containerWidth - rowWidth) / 2
+
+        let availableWidth = containerWidth - dismissRightOffset - editingButtonsWidth - predictionX - deviceLayout.predictionGap
+
+        predictionView.frame = CGRect(x: predictionX, y: buttonY, width: availableWidth, height: predictionHeight)
+
+        // Update with initial suggestions
+        let suggestions = predictionService.getSuggestions()
+        predictionView.updateSuggestions(suggestions) { [weak self] selectedSuggestion in
+            self?.textDocumentProxy.insertText(selectedSuggestion)
         }
     }
 
