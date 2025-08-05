@@ -51,7 +51,7 @@ class PredictionView: UIView {
         button.setTitleColor(theme.predictionTextColor, for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: deviceLayout.predictionFontSize)
         button.addTarget(self, action: #selector(suggestionButtonTapped), for: .touchUpInside)
-        
+
         // Store the insert text in the button's accessibilityValue
         button.accessibilityValue = insertText
 
