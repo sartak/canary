@@ -16,7 +16,8 @@ struct DeviceLayout {
     let topPadding: CGFloat
     let bottomPadding: CGFloat
     let cornerRadius: CGFloat
-    let chevronSize: CGFloat
+    let editingButtonSize: CGFloat
+    let editingButtonSpacing: CGFloat
     let regularFontSize: CGFloat
     let specialFontSize: CGFloat
     let smallFontSize: CGFloat
@@ -49,7 +50,8 @@ struct DeviceLayout {
         let baseTopPadding: CGFloat = 48
         let baseBottomPadding: CGFloat = baseVerticalGap / 2
         let baseCornerRadius: CGFloat = 5
-        let baseChevronSize: CGFloat = 16
+        let baseEditingButtonSize: CGFloat = 16
+        let baseEditingButtonSpacing: CGFloat = 8
         let baseRegularFontSize: CGFloat = 22
         let baseSpecialFontSize: CGFloat = 16
         let baseSmallFontSize: CGFloat = 12
@@ -82,7 +84,8 @@ struct DeviceLayout {
             topPadding: baseTopPadding * topPaddingScale,
             bottomPadding: baseBottomPadding * heightScale,
             cornerRadius: baseCornerRadius * cornerRadiusScale,
-            chevronSize: baseChevronSize * specialFontScale,
+            editingButtonSize: baseEditingButtonSize * specialFontScale,
+            editingButtonSpacing: baseEditingButtonSpacing * gapScale,
             regularFontSize: baseRegularFontSize * regularFontScale,
             specialFontSize: baseSpecialFontSize * specialFontScale,
             smallFontSize: baseSmallFontSize * specialFontScale,

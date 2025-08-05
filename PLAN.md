@@ -73,9 +73,8 @@
 **Goal**: Add dedicated clipboard access keys
 
 ### Clipboard Integration
-- [ ] Add copy and paste keys to keyboard layout
-- [ ] Implement UIPasteboard operations with full access ([Apple docs](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/ExtensionScenarios.html#//apple_ref/doc/uid/TP40014214-CH21-SW8))
-- [ ] Test clipboard functionality across apps
+- [x] Add cut, copy, and paste floating buttons positioned left of dismiss chevron
+- [x] Implement UIPasteboard operations with proper UITextDocumentProxy integration
 
 ## Milestone 7: Basic Predictions
 **Goal**: Add word suggestions using iOS text prediction APIs
