@@ -1,5 +1,9 @@
 import Foundation
 
+enum PredictionAction {
+    case insert(String)
+}
+
 class PredictionService {
     private static let maxSuggestions = 20
 
@@ -109,7 +113,7 @@ class PredictionService {
     private var contextBefore: String?
     private var contextAfter: String?
     private var selectedText: String?
-    private var cachedSuggestions: [(String, String)]?
+    private var cachedSuggestions: [(String, [PredictionAction])]?
 
     func updateContext(before: String?, after: String?, selected: String?) {
         self.contextBefore = before
@@ -118,7 +122,7 @@ class PredictionService {
         self.cachedSuggestions = nil
     }
 
-    func getSuggestions() -> [(String, String)] {
+    func getSuggestions() -> [(String, [PredictionAction])] {
         if let cached = cachedSuggestions {
             return cached
         }
@@ -128,7 +132,7 @@ class PredictionService {
         return suggestions
     }
 
-    private func makeSuggestions() -> [(String, String)] {
+    private func makeSuggestions() -> [(String, [PredictionAction])] {
         let (prefix, suffix) = extractCurrentWordContext()
 
         let prefixLower = prefix.lowercased()
@@ -153,20 +157,22 @@ class PredictionService {
                 // Remove prefix and suffix, keep middle part
                 let startIndex = word.index(word.startIndex, offsetBy: prefix.count)
                 let endIndex = word.index(word.endIndex, offsetBy: -suffix.count)
-                return (word, String(word[startIndex..<endIndex]))
+                let insertText = String(word[startIndex..<endIndex])
+                return (word, [.insert(insertText)])
             } else if !prefix.isEmpty {
                 // Remove prefix, add trailing space if no suffix
                 let insertText = String(word.dropFirst(prefix.count)) + (suffix.isEmpty ? " " : "")
-                return (word, insertText)
+                return (word, [.insert(insertText)])
             } else if !suffix.isEmpty {
                 // Remove suffix
-                return (word, String(word.dropLast(suffix.count)))
+                let insertText = String(word.dropLast(suffix.count))
+                return (word, [.insert(insertText)])
             } else {
                 // No prefix/suffix to remove - check spacing
                 let needsLeadingSpace = shouldAddLeadingSpace()
                 let baseText = needsLeadingSpace ? " " + word : word
                 let insertText = baseText + " "  // Always add trailing space when no suffix
-                return (word, insertText)
+                return (word, [.insert(insertText)])
             }
         }
     }
