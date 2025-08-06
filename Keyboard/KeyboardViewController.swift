@@ -26,6 +26,7 @@ class KeyboardViewController: UIInputViewController {
     private var predictionView: PredictionView!
     private var predictionService: PredictionService!
     private var pendingRefresh = false
+    private var maybePunctuating = false
 
     // Key repeat support
     private var keyRepeatTimer: Timer?
@@ -262,8 +263,14 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func handleAlternateSelected(_ alternate: String, from keyData: KeyData) {
-        // Insert the selected alternate character
-        textDocumentProxy.insertText(alternate)
+        // Handle smart punctuation for alternates
+        if Key.shouldUnspacePunctuation(alternate) && maybePunctuating {
+            textDocumentProxy.deleteBackward()
+            let trailingSpace = Key.shouldAddTrailingSpaceAfterPunctuation(alternate) ? " " : ""
+            textDocumentProxy.insertText(alternate + trailingSpace)
+        } else {
+            textDocumentProxy.insertText(alternate)
+        }
 
         // Auto-unshift after inserting alternate
         autoUnshift()
@@ -322,12 +329,17 @@ class KeyboardViewController: UIInputViewController {
                               },
                               globeHandler: { [weak self] in
                                   self?.advanceToNextInputMode()
-                              })
+                              },
+                              maybePunctuating: maybePunctuating)
 
         // Provide haptic feedback for each repeat
         HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
 
-        // Refresh suggestions after our key action
+        // Only reset maybePunctuating for keys that modify text content
+        let shouldResetMaybePunctuating = keyData.key.shouldResetMaybePunctuating()
+        if shouldResetMaybePunctuating {
+            resetMaybePunctuating()
+        }
         refreshSuggestions()
     }
 
@@ -521,6 +533,15 @@ class KeyboardViewController: UIInputViewController {
         refreshSuggestions()
     }
 
+    private func resetMaybePunctuating() {
+        maybePunctuating = false
+    }
+
+    private func handleTextChange() {
+        resetMaybePunctuating()
+        refreshSuggestions()
+    }
+
     private func refreshSuggestions() {
         guard !pendingRefresh else { return }
         pendingRefresh = true
@@ -558,6 +579,8 @@ class KeyboardViewController: UIInputViewController {
                         textDocumentProxy.adjustTextPosition(byCharacterOffset: -1)
                     }
                 }
+            case .maybePunctuating(let value):
+                maybePunctuating = value
             }
         }
     }
@@ -567,7 +590,7 @@ class KeyboardViewController: UIInputViewController {
         if let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty {
             UIPasteboard.general.string = selectedText
             textDocumentProxy.deleteBackward()
-            refreshSuggestions()
+            handleTextChange()
         }
     }
 
@@ -582,7 +605,7 @@ class KeyboardViewController: UIInputViewController {
         // Paste text from pasteboard
         if let pasteText = UIPasteboard.general.string {
             textDocumentProxy.insertText(pasteText)
-            refreshSuggestions()
+            handleTextChange()
         }
     }
 
@@ -634,11 +657,11 @@ class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
-        refreshSuggestions()
+        handleTextChange()
     }
 
     override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)
-        refreshSuggestions()
+        handleTextChange()
     }
 }
