@@ -2,6 +2,7 @@ import Foundation
 
 enum PredictionAction {
     case insert(String)
+    case moveCursor(Int)  // positive = forward, negative = backward
 }
 
 class PredictionService {
@@ -154,11 +155,18 @@ class PredictionService {
 
         return Array(matchingWords.prefix(Self.maxSuggestions)).map { word in
             if !prefix.isEmpty && !suffix.isEmpty {
-                // Remove prefix and suffix, keep middle part
+                // Insert middle part, move cursor past suffix, add space if at end
                 let startIndex = word.index(word.startIndex, offsetBy: prefix.count)
                 let endIndex = word.index(word.endIndex, offsetBy: -suffix.count)
                 let insertText = String(word[startIndex..<endIndex])
-                return (word, [.insert(insertText)])
+                var actions: [PredictionAction] = [.insert(insertText), .moveCursor(suffix.count)]
+
+                // Check if we're at the very end of the document
+                if let after = contextAfter, after.dropFirst(suffix.count).isEmpty {
+                    actions.append(.insert(" "))
+                }
+
+                return (word, actions)
             } else if !prefix.isEmpty {
                 // Remove prefix, add trailing space if no suffix
                 let insertText = String(word.dropFirst(prefix.count)) + (suffix.isEmpty ? " " : "")
