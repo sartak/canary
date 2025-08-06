@@ -138,7 +138,7 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
         // Process all touches up to and including the ending touch, in order
         let touchesToProcess = Array(touchQueue[0...endingTouchIndex])
 
-        for (touch, key) in touchesToProcess {
+        for (_, key) in touchesToProcess {
             onKeyTouchUp?(key)
             pressedKeys.remove(key.index)
         }

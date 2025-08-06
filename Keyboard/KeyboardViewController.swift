@@ -36,6 +36,10 @@ class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (traitEnvironment: UITraitEnvironment, previousTraitCollection: UITraitCollection) in
+            self?.keyboardTouchView?.setNeedsDisplay()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -151,7 +155,7 @@ class KeyboardViewController: UIInputViewController {
 
             // Set explicit height constraint for the main view
             heightConstraint = NSLayoutConstraint(
-                item: view,
+                item: view as Any,
                 attribute: .height,
                 relatedBy: .equal,
                 toItem: nil,
@@ -199,7 +203,7 @@ class KeyboardViewController: UIInputViewController {
             switch node {
             case .key(let key, let keyWidth):
                 let frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: deviceLayout.keyHeight)
-                let isLargeScreen = view.bounds.width > largeScreenWidth
+                _ = view.bounds.width > largeScreenWidth
                 let keyData = KeyData(
                     index: startingIndex + keys.count,
                     key: key,
@@ -645,13 +649,6 @@ class KeyboardViewController: UIInputViewController {
         keyPopouts.removeValue(forKey: keyData.index)
     }
 
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-
-        if traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle {
-            keyboardTouchView?.setNeedsDisplay()
-        }
-    }
 
     // MARK: - UITextInputDelegate
 
