@@ -41,7 +41,7 @@ class PredictionView: UIView {
             suggestionButtons.append(button)
         }
 
-        layoutSuggestionButtons()
+        layoutSuggestions()
     }
 
     private func createSuggestionButton(label: String, actions: [PredictionAction]) -> UIButton {
@@ -67,56 +67,43 @@ class PredictionView: UIView {
         onSuggestionTapped?(actions)
     }
 
-    private func layoutSuggestionButtons() {
+    private func layoutSuggestions() {
         guard !suggestionButtons.isEmpty else { return }
 
+        let theme = ColorTheme.current(for: traitCollection)
         var currentX: CGFloat = 0
-        let buttonHeight = bounds.height
+        let buttonHeight = deviceLayout.topPadding - deviceLayout.verticalGap
+        let buttonY = (bounds.height - buttonHeight) / 2
 
         for (index, button) in suggestionButtons.enumerated() {
-            // Calculate button width based on text content
+            // Calculate button width based on text content plus padding
             let text = button.title(for: .normal) ?? ""
             let textSize = (text as NSString).size(withAttributes: [
                 .font: UIFont.systemFont(ofSize: deviceLayout.predictionFontSize)
             ])
+            let leftPadding = index == 0 ? 0 : deviceLayout.predictionGap
+            let rightPadding = index == suggestionButtons.count - 1 ? 0 : deviceLayout.predictionGap
+            let buttonWidth = textSize.width + leftPadding + rightPadding
 
-            button.frame = CGRect(x: currentX, y: 0, width: textSize.width, height: buttonHeight)
-            currentX += textSize.width
+            button.frame = CGRect(x: currentX, y: buttonY, width: buttonWidth, height: buttonHeight)
+            currentX += buttonWidth
 
-            // Add gap after each button except the last one
+            // Add divider line after each button except the last one
             if index < suggestionButtons.count - 1 {
-                currentX += deviceLayout.predictionGap
+                let dividerLayer = CALayer()
+                dividerLayer.backgroundColor = theme.predictionDividerColor.cgColor
+                dividerLayer.frame = CGRect(x: button.frame.maxX, y: buttonY, width: 0.5, height: buttonHeight)
+                scrollView.layer.addSublayer(dividerLayer)
             }
         }
 
         // Set scroll view content size
-        scrollView.contentSize = CGSize(width: currentX, height: buttonHeight)
-
-        // Add dividing lines
-        addDividingLines()
-    }
-
-    private func addDividingLines() {
-        guard suggestionButtons.count > 1 else { return }
-
-        let theme = ColorTheme.current(for: traitCollection)
-
-        for i in 0..<(suggestionButtons.count - 1) {
-            let button = suggestionButtons[i]
-            let lineX = button.frame.maxX + deviceLayout.predictionGap / 2
-
-            let dividerLayer = CALayer()
-            dividerLayer.name = "dividing-line"
-            dividerLayer.backgroundColor = theme.predictionDividerColor.cgColor
-            dividerLayer.frame = CGRect(x: lineX, y: 0, width: 0.5, height: bounds.height)
-
-            scrollView.layer.addSublayer(dividerLayer)
-        }
+        scrollView.contentSize = CGSize(width: currentX, height: bounds.height)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         scrollView.frame = bounds
-        layoutSuggestionButtons()
+        layoutSuggestions()
     }
 }
