@@ -208,7 +208,7 @@ class AlternatesPopoutView: UIView {
         let theme = ColorTheme.current(for: containerView.traitCollection)
 
         // Get the label from the popout
-        guard let label = popoutView.subviews.first as? UILabel else { return }
+        guard popoutView.subviews.first is UILabel else { return }
 
         if selected {
             // Disable implicit animations for instant snapping
