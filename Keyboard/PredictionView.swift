@@ -29,8 +29,9 @@ class PredictionView: UIView {
         self.suggestions = suggestions
         self.onSuggestionTapped = onTapped
 
-        // Remove existing buttons
-        suggestionButtons.forEach { $0.removeFromSuperview() }
+        // Clear existing UI completely
+        scrollView.subviews.forEach { $0.removeFromSuperview() }
+        scrollView.layer.sublayers?.removeAll()
         suggestionButtons.removeAll()
 
         // Create new buttons for each suggestion
@@ -96,9 +97,6 @@ class PredictionView: UIView {
     }
 
     private func addDividingLines() {
-        // Remove existing dividing lines
-        scrollView.layer.sublayers?.removeAll { $0.name == "dividing-line" }
-
         guard suggestionButtons.count > 1 else { return }
 
         let theme = ColorTheme.current(for: traitCollection)
