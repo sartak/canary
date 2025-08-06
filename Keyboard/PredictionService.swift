@@ -3,6 +3,7 @@ import Foundation
 enum PredictionAction {
     case insert(String)
     case moveCursor(Int)  // positive = forward, negative = backward
+    case maybePunctuating(Bool)
 }
 
 class PredictionService {
@@ -166,13 +167,16 @@ class PredictionService {
                 // Check if we're at the very end of the document
                 if let after = contextAfter, after.dropFirst(suffix.count).isEmpty {
                     actions.append(.insert(" "))
+                    actions.append(.maybePunctuating(true))
                 }
 
                 return (displayWord, actions)
             } else if !prefix.isEmpty {
                 // Remove prefix, add trailing space if no suffix
-                let insertText = String(displayWord.dropFirst(prefix.count)) + (suffix.isEmpty ? " " : "")
-                return (displayWord, [.insert(insertText)])
+                let needsTrailingSpace = suffix.isEmpty
+                let insertText = String(displayWord.dropFirst(prefix.count)) + (needsTrailingSpace ? " " : "")
+                let actions: [PredictionAction] = needsTrailingSpace ? [.insert(insertText), .maybePunctuating(true)] : [.insert(insertText)]
+                return (displayWord, actions)
             } else if !suffix.isEmpty {
                 // Remove suffix
                 let insertText = String(displayWord.dropLast(suffix.count))
@@ -182,7 +186,7 @@ class PredictionService {
                 let needsLeadingSpace = shouldAddLeadingSpace()
                 let baseWord = applySmartCapitalization(word: word, userPrefix: prefix, userSuffix: suffix)
                 let insertText = (needsLeadingSpace ? " " + baseWord : baseWord) + " "
-                return (displayWord, [.insert(insertText)])
+                return (displayWord, [.insert(insertText), .maybePunctuating(true)])
             }
         }
     }

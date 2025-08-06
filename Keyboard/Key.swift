@@ -56,11 +56,28 @@ struct Key {
         self.doubleTapBehavior = doubleTapBehavior
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void) {
+    static func shouldUnspacePunctuation(_ text: String) -> Bool {
+        let unspacingCharacters: Set<Character> = [".", ",", "!", "?", ":", ";", ")", "]", "}", "'", "\"", "—", "…"]
+        return text.count == 1 && unspacingCharacters.contains(text.first!)
+    }
+
+    static func shouldAddTrailingSpaceAfterPunctuation(_ text: String) -> Bool {
+        let noTrailingSpaceCharacters: Set<Character> = ["—"]
+        return !(text.count == 1 && noTrailingSpaceCharacters.contains(text.first!))
+    }
+
+    func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, maybePunctuating: Bool) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
-            textDocumentProxy.insertText(text)
+            // Remove trailing space before punctuation if maybePunctuating is true
+            if Key.shouldUnspacePunctuation(text) && maybePunctuating {
+                textDocumentProxy.deleteBackward()
+                let trailingSpace = Key.shouldAddTrailingSpaceAfterPunctuation(text) ? " " : ""
+                textDocumentProxy.insertText(text + trailingSpace)
+            } else {
+                textDocumentProxy.insertText(text)
+            }
         case .backspace:
             textDocumentProxy.deleteBackward()
         case .shift:
@@ -217,6 +234,15 @@ struct Key {
             return .selection
         case .globe, .empty:
             return .none
+        }
+    }
+
+    func shouldResetMaybePunctuating() -> Bool {
+        switch keyType {
+        case .simple, .backspace, .enter, .space:
+            return true
+        case .shift, .layerSwitch, .layoutSwitch, .globe, .empty:
+            return false
         }
     }
 }
