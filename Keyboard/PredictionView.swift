@@ -22,12 +22,16 @@ class PredictionView: UIView {
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
         scrollView.alwaysBounceVertical = false
+        scrollView.maximumZoomScale = 1.0
+        scrollView.minimumZoomScale = 1.0
         addSubview(scrollView)
     }
 
     func updateSuggestions(_ suggestions: [(String, [PredictionAction])], onTapped: @escaping ([PredictionAction]) -> Void) {
         self.suggestions = suggestions
         self.onSuggestionTapped = onTapped
+
+        scrollView.contentOffset.x = 0
 
         // Clear existing UI completely
         scrollView.subviews.forEach { $0.removeFromSuperview() }
