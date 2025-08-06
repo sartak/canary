@@ -154,11 +154,13 @@ class PredictionService {
         }
 
         return Array(matchingWords.prefix(Self.maxSuggestions)).map { word in
+            let displayWord = applySmartCapitalization(word: word, userPrefix: prefix, userSuffix: suffix)
+
             if !prefix.isEmpty && !suffix.isEmpty {
                 // Insert middle part, move cursor past suffix, add space if at end
-                let startIndex = word.index(word.startIndex, offsetBy: prefix.count)
-                let endIndex = word.index(word.endIndex, offsetBy: -suffix.count)
-                let insertText = String(word[startIndex..<endIndex])
+                let startIndex = displayWord.index(displayWord.startIndex, offsetBy: prefix.count)
+                let endIndex = displayWord.index(displayWord.endIndex, offsetBy: -suffix.count)
+                let insertText = String(displayWord[startIndex..<endIndex])
                 var actions: [PredictionAction] = [.insert(insertText), .moveCursor(suffix.count)]
 
                 // Check if we're at the very end of the document
@@ -166,23 +168,96 @@ class PredictionService {
                     actions.append(.insert(" "))
                 }
 
-                return (word, actions)
+                return (displayWord, actions)
             } else if !prefix.isEmpty {
                 // Remove prefix, add trailing space if no suffix
-                let insertText = String(word.dropFirst(prefix.count)) + (suffix.isEmpty ? " " : "")
-                return (word, [.insert(insertText)])
+                let insertText = String(displayWord.dropFirst(prefix.count)) + (suffix.isEmpty ? " " : "")
+                return (displayWord, [.insert(insertText)])
             } else if !suffix.isEmpty {
                 // Remove suffix
-                let insertText = String(word.dropLast(suffix.count))
-                return (word, [.insert(insertText)])
+                let insertText = String(displayWord.dropLast(suffix.count))
+                return (displayWord, [.insert(insertText)])
             } else {
                 // No prefix/suffix to remove - check spacing
                 let needsLeadingSpace = shouldAddLeadingSpace()
-                let baseText = needsLeadingSpace ? " " + word : word
-                let insertText = baseText + " "  // Always add trailing space when no suffix
-                return (word, [.insert(insertText)])
+                let baseWord = applySmartCapitalization(word: word, userPrefix: prefix, userSuffix: suffix)
+                let insertText = (needsLeadingSpace ? " " + baseWord : baseWord) + " "
+                return (displayWord, [.insert(insertText)])
             }
         }
+    }
+
+    /// Applies smart capitalization rules based on user input patterns
+    ///
+    /// Rules:
+    /// - Users typically type lowercase, so preserve corpus capitalization unless user actively indicates otherwise
+    /// - If user input is all lowercase → preserve corpus capitalization
+    /// - If user uses capitals → apply their pattern, but only if it results in same or more capitals than corpus
+    ///
+    /// Examples with regular words:
+    /// - "w|d" + "world" → "world" (all lowercase)
+    /// - "W|d" + "world" → "World" (title case)
+    /// - "Wo|d" + "world" → "World" (title case)
+    /// - "W|D" + "world" → "WORLD" (all caps intent)
+    /// - "WO|D" + "world" → "WORLD" (all caps)
+    /// - "Wo|D" + "world" → "WorlD" (mixed case preserved)
+    ///
+    /// Examples with proper nouns:
+    /// - "sh|" + "Shawn" → "Shawn" (preserve corpus caps)
+    /// - "Sh|" + "Shawn" → "Shawn" (matches corpus)
+    /// - "SH|" + "Shawn" → "SHAWN" (user wants all caps)
+    /// - "SH|" + "should" → "SHOULD" (force all caps on regular word)
+    ///
+    /// Examples with acronyms:
+    /// - "u|" + "USA" → "USA" (preserve corpus caps)
+    /// - "U|" + "USA" → "USA" (preserve corpus caps)
+    /// - "US|" + "USA" → "USA" (pattern matches corpus)
+    /// - "us|" + "USA" → "USA" (preserve corpus caps)
+    /// - "Us|" + "USA" → "USA" (preserve corpus caps)
+    /// - "uS|" + "USA" → "USA" (preserve corpus caps)
+    private func applySmartCapitalization(word: String, userPrefix: String, userSuffix: String) -> String {
+        let userPattern = userPrefix + userSuffix
+
+        // If user input is all lowercase, preserve corpus capitalization
+        if userPattern.lowercased() == userPattern {
+            return word
+        }
+
+        // Apply user's capitalization pattern to the full word
+        let patternLength = userPattern.count
+        let wordLength = word.count
+
+        guard patternLength > 0 && wordLength > 0 else { return word }
+
+        var result = word
+        let wordArray = Array(word)
+        let patternArray = Array(userPattern)
+
+        // Apply capitalization pattern character by character
+        for i in 0..<min(patternLength, wordLength) {
+            let patternChar = patternArray[i]
+            let wordChar = wordArray[i]
+
+            if patternChar.isUppercase {
+                result = String(result.prefix(i)) + String(wordChar).uppercased() + String(result.dropFirst(i + 1))
+            } else {
+                result = String(result.prefix(i)) + String(wordChar).lowercased() + String(result.dropFirst(i + 1))
+            }
+        }
+
+        // If pattern is shorter than word, preserve remaining corpus capitalization
+        // If user pattern shows "all caps intent" (multiple consecutive capitals), apply to whole word
+        if patternLength < wordLength {
+            let userCapitals = userPattern.filter { $0.isUppercase }.count
+            let isAllCapsIntent = userCapitals == patternLength && userCapitals > 1
+
+            if isAllCapsIntent {
+                result = result.uppercased()
+            }
+            // Otherwise keep remaining characters as they were in corpus
+        }
+
+        return result
     }
 
     private func shouldAddLeadingSpace() -> Bool {
