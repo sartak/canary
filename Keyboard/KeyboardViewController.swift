@@ -548,6 +548,16 @@ class KeyboardViewController: UIInputViewController {
             switch action {
             case .insert(let text):
                 textDocumentProxy.insertText(text)
+            case .moveCursor(let offset):
+                if offset > 0 {
+                    for _ in 0..<offset {
+                        textDocumentProxy.adjustTextPosition(byCharacterOffset: 1)
+                    }
+                } else if offset < 0 {
+                    for _ in 0..<(-offset) {
+                        textDocumentProxy.adjustTextPosition(byCharacterOffset: -1)
+                    }
+                }
             }
         }
     }
