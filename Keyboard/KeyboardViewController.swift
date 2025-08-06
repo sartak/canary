@@ -492,9 +492,9 @@ class KeyboardViewController: UIInputViewController {
 
         view.addSubview(predictionView)
 
-        // Position the prediction view at the same vertical level as editing buttons
-        let buttonY = (deviceLayout.topPadding - dismissButtonSize) / 2
-        let predictionHeight = dismissButtonSize
+        // Position the prediction view to use the full topPadding height
+        let predictionY: CGFloat = 0
+        let predictionHeight = deviceLayout.topPadding
 
         // Calculate available space for predictions (left side of editing buttons)
         let containerWidth = view.bounds.width
@@ -515,7 +515,7 @@ class KeyboardViewController: UIInputViewController {
 
         let availableWidth = containerWidth - dismissRightOffset - editingButtonsWidth - predictionX - deviceLayout.predictionGap
 
-        predictionView.frame = CGRect(x: predictionX, y: buttonY, width: availableWidth, height: predictionHeight)
+        predictionView.frame = CGRect(x: predictionX, y: predictionY, width: availableWidth, height: predictionHeight)
 
         // Update with initial suggestions
         refreshSuggestions()
