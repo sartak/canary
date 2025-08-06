@@ -1,10 +1,10 @@
 import UIKit
 
 class PredictionView: UIView {
-    private var suggestions: [(String, String)] = []
+    private var suggestions: [(String, [PredictionAction])] = []
     private var suggestionButtons: [UIButton] = []
     private var deviceLayout: DeviceLayout
-    private var onSuggestionTapped: ((String) -> Void)?
+    private var onSuggestionTapped: (([PredictionAction]) -> Void)?
     private var scrollView: UIScrollView!
 
     init(deviceLayout: DeviceLayout) {
@@ -25,7 +25,7 @@ class PredictionView: UIView {
         addSubview(scrollView)
     }
 
-    func updateSuggestions(_ suggestions: [(String, String)], onTapped: @escaping (String) -> Void) {
+    func updateSuggestions(_ suggestions: [(String, [PredictionAction])], onTapped: @escaping ([PredictionAction]) -> Void) {
         self.suggestions = suggestions
         self.onSuggestionTapped = onTapped
 
@@ -34,8 +34,8 @@ class PredictionView: UIView {
         suggestionButtons.removeAll()
 
         // Create new buttons for each suggestion
-        for (label, insertText) in suggestions {
-            let button = createSuggestionButton(label: label, insertText: insertText)
+        for (label, actions) in suggestions {
+            let button = createSuggestionButton(label: label, actions: actions)
             scrollView.addSubview(button)
             suggestionButtons.append(button)
         }
@@ -43,7 +43,7 @@ class PredictionView: UIView {
         layoutSuggestionButtons()
     }
 
-    private func createSuggestionButton(label: String, insertText: String) -> UIButton {
+    private func createSuggestionButton(label: String, actions: [PredictionAction]) -> UIButton {
         let button = UIButton(type: .system)
         let theme = ColorTheme.current(for: traitCollection)
 
@@ -52,15 +52,18 @@ class PredictionView: UIView {
         button.titleLabel?.font = UIFont.systemFont(ofSize: deviceLayout.predictionFontSize)
         button.addTarget(self, action: #selector(suggestionButtonTapped), for: .touchUpInside)
 
-        // Store the insert text in the button's accessibilityValue
-        button.accessibilityValue = insertText
+        // Store the actions in the button's tag (we'll use a lookup approach)
+        let buttonIndex = suggestionButtons.count
+        button.tag = buttonIndex
 
         return button
     }
 
     @objc private func suggestionButtonTapped(_ sender: UIButton) {
-        guard let insertText = sender.accessibilityValue else { return }
-        onSuggestionTapped?(insertText)
+        let buttonIndex = sender.tag
+        guard buttonIndex < suggestions.count else { return }
+        let actions = suggestions[buttonIndex].1
+        onSuggestionTapped?(actions)
     }
 
     private func layoutSuggestionButtons() {

@@ -536,9 +536,18 @@ class KeyboardViewController: UIInputViewController {
             self.predictionService.updateContext(before: before, after: after, selected: selected)
             let suggestions = self.predictionService.getSuggestions()
 
-            self.predictionView.updateSuggestions(suggestions) { [weak self] selectedSuggestion in
-                self?.textDocumentProxy.insertText(selectedSuggestion)
+            self.predictionView.updateSuggestions(suggestions) { [weak self] actions in
+                self?.executeActions(actions)
                 self?.refreshSuggestions()
+            }
+        }
+    }
+
+    private func executeActions(_ actions: [PredictionAction]) {
+        for action in actions {
+            switch action {
+            case .insert(let text):
+                textDocumentProxy.insertText(text)
             }
         }
     }
