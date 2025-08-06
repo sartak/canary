@@ -32,9 +32,6 @@ struct DeviceLayout {
     let funnelHeight: CGFloat
     let alternateKeyWidth: CGFloat
     let popupToKeyOffset: CGFloat
-    let popupHorizontalPadding: CGFloat
-    let popupMinimumWidthPadding: CGFloat
-    let edgeHitboxWidthMultiplier: CGFloat
 
     static func forCurrentDevice(containerWidth: CGFloat, containerHeight: CGFloat) -> DeviceLayout {
         // iPhone 16 Pro portrait baselines: 402pts width, 874pts height
@@ -66,9 +63,6 @@ struct DeviceLayout {
         let baseFunnelHeight: CGFloat = 15
         let baseAlternateKeyWidth: CGFloat = 32
         let basePopupToKeyOffset: CGFloat = 10
-        let basePopupHorizontalPadding: CGFloat = 8
-        let basePopupMinimumWidthPadding: CGFloat = 10
-        let baseEdgeHitboxWidthMultiplier: CGFloat = 1.5
 
         // Font scaling should be more conservative than UI scaling
         // Different scaling rates for different font types
@@ -102,10 +96,7 @@ struct DeviceLayout {
             popoutTextVerticalRatio: 0.35,
             funnelHeight: baseFunnelHeight * heightScale,
             alternateKeyWidth: baseAlternateKeyWidth * widthScale,
-            popupToKeyOffset: basePopupToKeyOffset * heightScale,
-            popupHorizontalPadding: basePopupHorizontalPadding * widthScale,
-            popupMinimumWidthPadding: basePopupMinimumWidthPadding * widthScale,
-            edgeHitboxWidthMultiplier: baseEdgeHitboxWidthMultiplier
+            popupToKeyOffset: basePopupToKeyOffset * heightScale
         )
 
         return layout
