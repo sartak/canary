@@ -155,16 +155,31 @@ class PredictionService {
                 let endIndex = word.index(word.endIndex, offsetBy: -suffix.count)
                 return (word, String(word[startIndex..<endIndex]))
             } else if !prefix.isEmpty {
-                // Remove prefix
-                return (word, String(word.dropFirst(prefix.count)))
+                // Remove prefix, add trailing space if no suffix
+                let insertText = String(word.dropFirst(prefix.count)) + (suffix.isEmpty ? " " : "")
+                return (word, insertText)
             } else if !suffix.isEmpty {
                 // Remove suffix
                 return (word, String(word.dropLast(suffix.count)))
             } else {
-                // No prefix/suffix to remove
-                return (word, word)
+                // No prefix/suffix to remove - check spacing
+                let needsLeadingSpace = shouldAddLeadingSpace()
+                let baseText = needsLeadingSpace ? " " + word : word
+                let insertText = baseText + " "  // Always add trailing space when no suffix
+                return (word, insertText)
             }
         }
+    }
+
+    private func shouldAddLeadingSpace() -> Bool {
+        guard let before = contextBefore, !before.isEmpty else {
+            return false
+        }
+
+        let lastChar = before.last!
+
+        // Add space after letters or punctuation that typically needs space after it
+        return lastChar.isLetter || ".,!?:;".contains(lastChar)
     }
 
     private func extractCurrentWordContext() -> (prefix: String, suffix: String) {
