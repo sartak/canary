@@ -55,6 +55,7 @@ class PredictionView: UIView {
         button.setTitle(label, for: .normal)
         button.setTitleColor(theme.predictionTextColor, for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: deviceLayout.predictionFontSize)
+        button.contentHorizontalAlignment = .left
         button.addTarget(self, action: #selector(suggestionButtonTapped), for: .touchUpInside)
 
         // Store the actions in the button's tag (we'll use a lookup approach)
@@ -85,10 +86,13 @@ class PredictionView: UIView {
             let textSize = (text as NSString).size(withAttributes: [
                 .font: UIFont.systemFont(ofSize: deviceLayout.predictionFontSize)
             ])
+
+            // First button gets no left padding, others get normal padding
             let leftPadding = index == 0 ? 0 : deviceLayout.predictionGap
-            let rightPadding = index == suggestionButtons.count - 1 ? 0 : deviceLayout.predictionGap
+            let rightPadding = deviceLayout.predictionGap
             let buttonWidth = textSize.width + leftPadding + rightPadding
 
+            button.titleEdgeInsets = UIEdgeInsets(top: 0, left: leftPadding, bottom: 0, right: rightPadding)
             button.frame = CGRect(x: currentX, y: buttonY, width: buttonWidth, height: buttonHeight)
             currentX += buttonWidth
 
