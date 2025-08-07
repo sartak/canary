@@ -11,6 +11,9 @@ class PredictionService {
     private static let maxSuggestions = 20
     private var db: OpaquePointer?
 
+    // Cache most common words (no prefix/suffix) since they're queried frequently
+    private static var commonWords: [String]?
+
     private var contextBefore: String?
     private var contextAfter: String?
     private var selectedText: String?
@@ -45,6 +48,13 @@ class PredictionService {
 
     private func queryWords(prefix: String, suffix: String) -> [String] {
         guard let db = db else { return [] }
+
+        // Cache most common words (no prefix/suffix) since they're queried frequently
+        if prefix.isEmpty && suffix.isEmpty {
+            if let cached = Self.commonWords {
+                return cached
+            }
+        }
 
         var query: String
         var textBindValues: [String] = []
@@ -91,6 +101,12 @@ class PredictionService {
         }
 
         sqlite3_finalize(statement)
+
+        // Cache common words for future use
+        if prefix.isEmpty && suffix.isEmpty {
+            Self.commonWords = results
+        }
+
         return results
     }
 
