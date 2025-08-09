@@ -73,7 +73,7 @@ struct Key {
             // Remove trailing space before punctuation if maybePunctuating is true
             if Key.shouldUnspacePunctuation(text) && maybePunctuating {
                 textDocumentProxy.deleteBackward()
-                let trailingSpace = Key.shouldAddTrailingSpaceAfterPunctuation(text) ? " " : ""
+                let trailingSpace = (maybePunctuating && Key.shouldAddTrailingSpaceAfterPunctuation(text)) ? " " : ""
                 textDocumentProxy.insertText(text + trailingSpace)
             } else {
                 textDocumentProxy.insertText(text)
