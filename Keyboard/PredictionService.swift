@@ -172,31 +172,23 @@ class PredictionService {
                 return
             }
 
-            print("ProactiveTypo: Starting background search for '\(newWord)'")
 
             // Start new background search
             let task = DispatchWorkItem { [weak self] in
                 guard let self = self, let backgroundDB = self.backgroundDB else { return }
 
-                let startTime = CFAbsoluteTimeGetCurrent()
-
                 // Check if search was cancelled by checking if current word changed
                 if newWord != self.currentSearchWord {
-                    print("ProactiveTypo: '\(newWord)' search cancelled before query")
                     return
                 }
 
                 let candidates = self.queryBKTreeWithDB(db: backgroundDB, word: newWord, maxDistance: 2)
-                let queryTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
 
                 // Update results on main thread
                 DispatchQueue.main.async {
                     // Only update if this search is still current (not cancelled)
                     if newWord == self.currentSearchWord {
                         self.proactiveCandidates = candidates
-                        print("ProactiveTypo: '\(newWord)' completed, found \(candidates.count) candidates in \(String(format: "%.1f", queryTime))ms")
-                    } else {
-                        print("ProactiveTypo: '\(newWord)' search was cancelled or obsolete")
                     }
                 }
             }
@@ -410,23 +402,25 @@ class PredictionService {
         return previousRow.last!
     }
 
-    private func wordExists(_ word: String) -> Bool {
-        guard let db = db else { return false }
+    private func getCanonicalWord(_ word: String) -> String? {
+        guard let db = db else { return nil }
 
-        let query = "SELECT 1 FROM words WHERE word_lower = ? LIMIT 1"
+        let query = "SELECT word FROM words WHERE word_lower = ? LIMIT 1"
         var statement: OpaquePointer?
-        var exists = false
+        var canonicalWord: String?
 
         if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
             sqlite3_bind_text(statement, 1, word.lowercased(), -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
 
             if sqlite3_step(statement) == SQLITE_ROW {
-                exists = true
+                if let wordPtr = sqlite3_column_text(statement, 0) {
+                    canonicalWord = String(cString: wordPtr)
+                }
             }
         }
 
         sqlite3_finalize(statement)
-        return exists
+        return canonicalWord
     }
 
     private func queryBKTree(word: String, maxDistance: Int) -> [(String, Int, Int)] {
@@ -508,58 +502,42 @@ class PredictionService {
 
 
     func correctTypo(word: String) -> String? {
-        let startTime = CFAbsoluteTimeGetCurrent()
         let trimmedWord = word.trimmingCharacters(in: .whitespaces)
 
-        // Return nil if word exists in dictionary
-        let existsCheckStart = CFAbsoluteTimeGetCurrent()
-        if wordExists(trimmedWord) {
-            let totalTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-            print("TypoCorrection: '\(trimmedWord)' exists in dictionary, total: \(String(format: "%.2f", totalTime))ms")
-            return nil
+        // Check if word exists in dictionary and apply smart capitalization
+        if let canonicalWord = getCanonicalWord(trimmedWord) {
+            // Apply smart capitalization based on user input
+            let smartCapitalizedWord = applySmartCapitalization(word: canonicalWord, userPrefix: trimmedWord, userSuffix: "")
+
+            if smartCapitalizedWord != trimmedWord {
+                return smartCapitalizedWord
+            } else {
+                return nil
+            }
         }
-        let existsCheckTime = (CFAbsoluteTimeGetCurrent() - existsCheckStart) * 1000
 
         // Use pre-computed proactive candidates if available and current
-        var candidates: [(String, Int, Int)]
-        var queryTime: Double
+        let candidates: [(String, Int, Int)]
 
         if trimmedWord.lowercased() == currentSearchWord {
             if !proactiveCandidates.isEmpty {
                 // Use pre-computed candidates
-                queryTime = 0.0
                 candidates = proactiveCandidates
-                print("TypoCorrection: Using proactive candidates for '\(trimmedWord)'")
             } else if let task = searchTask, !task.isCancelled {
                 // Wait for the ongoing proactive search to complete
-                let queryStart = CFAbsoluteTimeGetCurrent()
-                print("TypoCorrection: Waiting for proactive search to complete for '\(trimmedWord)'")
-
-                // Wait for the task to complete
                 task.wait()
-
-                queryTime = (CFAbsoluteTimeGetCurrent() - queryStart) * 1000
                 candidates = proactiveCandidates
-                print("TypoCorrection: Proactive search completed, using results for '\(trimmedWord)'")
             } else {
                 // No proactive search running, do synchronous search
-                let queryStart = CFAbsoluteTimeGetCurrent()
                 candidates = queryBKTree(word: trimmedWord, maxDistance: 2)
-                queryTime = (CFAbsoluteTimeGetCurrent() - queryStart) * 1000
-                print("TypoCorrection: No proactive search, using synchronous search for '\(trimmedWord)'")
             }
         } else {
             // Different word, do synchronous search
-            let queryStart = CFAbsoluteTimeGetCurrent()
             candidates = queryBKTree(word: trimmedWord, maxDistance: 2)
-            queryTime = (CFAbsoluteTimeGetCurrent() - queryStart) * 1000
-            print("TypoCorrection: Different word, using synchronous search for '\(trimmedWord)' (was searching for '\(currentSearchWord)')")
         }
 
         // Return nil if no candidates found
         if candidates.isEmpty {
-            let totalTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-            print("TypoCorrection: '\(trimmedWord)' no candidates found, exists: \(String(format: "%.2f", existsCheckTime))ms, query: \(String(format: "%.2f", queryTime))ms, total: \(String(format: "%.2f", totalTime))ms")
             return nil
         }
 
@@ -571,20 +549,11 @@ class PredictionService {
             return a.2 < b.2 // Lower frequency_rank is better (higher frequency)
         }
 
-        let totalTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-
-        // Debug: show top candidates by distance and frequency
-        let sortedCandidates = candidates.sorted { a, b in
-            if a.1 != b.1 {
-                return a.1 < b.1 // Lower distance first
-            }
-            return a.2 < b.2 // Lower frequency_rank (higher frequency) first
+        // Apply smart capitalization to the correction
+        if let candidateWord = bestCandidate?.0 {
+            return applySmartCapitalization(word: candidateWord, userPrefix: trimmedWord, userSuffix: "")
         }
-        let topCandidates = Array(sortedCandidates.prefix(10))
-        let candidateStr = topCandidates.map { "'\($0.0)'(d\($0.1),f\($0.2))" }.joined(separator: ", ")
 
-        print("TypoCorrection: '\(trimmedWord)' → '\(bestCandidate?.0 ?? "nil")' (\(candidates.count) candidates: \(candidateStr)), exists: \(String(format: "%.2f", existsCheckTime))ms, query: \(String(format: "%.2f", queryTime))ms, total: \(String(format: "%.2f", totalTime))ms")
-
-        return bestCandidate?.0
+        return nil
     }
 }
