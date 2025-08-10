@@ -131,12 +131,12 @@ struct Key {
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, predictionService: PredictionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, maybePunctuating: Bool, autocorrectVisualHandler: @escaping (String, String, CGPoint) -> Void = { _, _, _ in }) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, predictionService: PredictionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, autocorrectVisualHandler: @escaping (String, String, CGPoint) -> Void = { _, _, _ in }) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
             // Check if this character should trigger autocorrect
-            if Key.shouldTriggerAutocorrect(text) {
+            if autocorrectEnabled && Key.shouldTriggerAutocorrect(text) {
                 // Apply autocorrect with visual feedback
                 Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
             }
@@ -157,11 +157,15 @@ struct Key {
             shiftHandler()
         case .enter:
             // Apply autocorrect with visual feedback before line break
-            Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+            if autocorrectEnabled {
+                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+            }
             textDocumentProxy.insertText("\n")
         case .space:
             // Apply autocorrect with visual feedback before inserting space
-            Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+            if autocorrectEnabled {
+                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+            }
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):
             layerSwitchHandler(layer)

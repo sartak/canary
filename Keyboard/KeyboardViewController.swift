@@ -27,6 +27,12 @@ class KeyboardViewController: UIInputViewController {
     private var predictionService: PredictionService!
     private var pendingRefresh = false
     private var maybePunctuating = false
+    private var autocorrectEnabled = true
+
+    // Expose autocorrect state for testing/debugging
+    var isAutocorrectEnabled: Bool {
+        return autocorrectEnabled
+    }
 
     // Key repeat support
     private var keyRepeatTimer: Timer?
@@ -51,6 +57,7 @@ class KeyboardViewController: UIInputViewController {
         // Always setup keyboard initially
         if keyboardTouchView == nil {
             needsGlobe = needsInputModeSwitchKey
+            updateAutocorrectSettings()
             setupKeyboard()
 
             // If bounds seem wrong (full screen on iPad), schedule a rebuild
@@ -336,6 +343,7 @@ class KeyboardViewController: UIInputViewController {
                                   self?.advanceToNextInputMode()
                               },
                               maybePunctuating: maybePunctuating,
+                              autocorrectEnabled: autocorrectEnabled,
                               autocorrectVisualHandler: { [weak self] originalWord, correctedWord, _ in
                                   self?.showAutocorrectFeedback(from: originalWord, to: correctedWord, for: keyData)
                               })
@@ -676,11 +684,40 @@ class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        updateAutocorrectSettings()
         handleTextChange()
     }
 
     override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)
         handleTextChange()
+    }
+
+    // MARK: - Autocorrect Detection
+
+    private func updateAutocorrectSettings() {
+        // Check the host app's autocorrect setting
+        let hostDisablesAutocorrect = (textDocumentProxy.autocorrectionType == .no)
+
+        // Disable autocorrect if the host app explicitly disables it
+        // This covers SSH apps, password fields, code editors, and other contexts where text correction is unwanted
+        if hostDisablesAutocorrect {
+            disableAutocorrect()
+        } else {
+            // Regular text input contexts where autocorrect is welcome
+            enableAutocorrect()
+        }
+    }
+
+    private func disableAutocorrect() {
+        if autocorrectEnabled {
+            autocorrectEnabled = false
+        }
+    }
+
+    private func enableAutocorrect() {
+        if !autocorrectEnabled {
+            autocorrectEnabled = true
+        }
     }
 }
