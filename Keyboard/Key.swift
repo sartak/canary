@@ -66,6 +66,13 @@ struct Key {
         return !(text.count == 1 && noTrailingSpaceCharacters.contains(text.first!))
     }
 
+    static func shouldTriggerAutocorrect(_ text: String) -> Bool {
+        // Trigger autocorrect for punctuation that ends words, but not for apostrophe
+        // since apostrophe may be part of contractions that aren't complete yet
+        let autocorrectTriggers: Set<Character> = [".", ",", "!", "?", ":", ";", ")", "]", "}", "\"", "—", "…"]
+        return text.count == 1 && autocorrectTriggers.contains(text.first!)
+    }
+
     static func autocorrectWord(_ word: String, using predictionService: PredictionService) -> String {
         let trimmedWord = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedWord.isEmpty else { return word }
@@ -128,12 +135,14 @@ struct Key {
         // Handle the key action
         switch keyType {
         case .simple(let text):
-            // Check if this is punctuation that ends a word - apply autocorrect first
-            if Key.shouldUnspacePunctuation(text) {
+            // Check if this character should trigger autocorrect
+            if Key.shouldTriggerAutocorrect(text) {
                 // Apply autocorrect with visual feedback
                 Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+            }
 
-                // Handle spacing for punctuation
+            // Handle spacing for punctuation
+            if Key.shouldUnspacePunctuation(text) {
                 if maybePunctuating {
                     textDocumentProxy.deleteBackward()
                 }

@@ -337,14 +337,30 @@ class PredictionService {
         return lastChar.isLetter || ".,!?:;".contains(lastChar)
     }
 
+    private func isWordCharacter(in text: String, at index: String.Index) -> Bool {
+        let char = text[index]
+
+        if char.isLetter {
+            return true
+        }
+
+        // Include apostrophe only if it's surrounded by letters on both sides
+        if char == "'" {
+            let hasLetterBefore = index > text.startIndex && text[text.index(before: index)].isLetter
+            let hasLetterAfter = index < text.index(before: text.endIndex) && text[text.index(after: index)].isLetter
+            return hasLetterBefore && hasLetterAfter
+        }
+
+        return false
+    }
+
     private func extractCurrentWordContext() -> (prefix: String, suffix: String) {
         let prefix: String
         if let before = contextBefore {
-            // Find the current word by walking backwards from the end until we hit a non-alpha character
+            // Find the current word by walking backwards from the end until we hit a non-word character
             var wordStart = before.endIndex
             for index in before.indices.reversed() {
-                let char = before[index]
-                if char.isLetter {
+                if isWordCharacter(in: before, at: index) {
                     wordStart = index
                 } else {
                     break
@@ -357,11 +373,10 @@ class PredictionService {
 
         let suffix: String
         if let after = contextAfter {
-            // Find the suffix by walking forward from the beginning until we hit a non-alpha character
+            // Find the suffix by walking forward from the beginning until we hit a non-word character
             var wordEnd = after.startIndex
             for index in after.indices {
-                let char = after[index]
-                if char.isLetter {
+                if isWordCharacter(in: after, at: index) {
                     wordEnd = after.index(after: index)
                 } else {
                     break
