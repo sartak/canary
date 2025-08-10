@@ -444,13 +444,12 @@ class PredictionService {
     }
 
     private func queryBKTreeWithDB(db: OpaquePointer, word: String, maxDistance: Int) -> [(String, Int, Int)] {
-
         var candidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
         var queue: [Int] = [1] // Just node_ids for simpler queue
         var visited: Set<Int> = [] // Avoid revisiting nodes
         var nodesExplored = 0
 
-        while !queue.isEmpty && nodesExplored < 2000 { // Limit exploration to prevent runaway queries
+        while !queue.isEmpty {
             let nodeId = queue.removeFirst()
 
             if visited.contains(nodeId) {
@@ -473,20 +472,13 @@ class PredictionService {
                     let isHidden = Int(sqlite3_column_int(nodeStatement, 2))
 
                     let distance = levenshteinDistance(word, nodeWord)
-
                     if distance <= maxDistance && isHidden == 0 {
                         candidates.append((nodeWord, distance, frequencyRank))
                     }
 
-                    // Early exit only if we have multiple distance-1 candidates
-                    let distance1Count = candidates.filter { $0.1 == 1 }.count
-                    if distance1Count >= 5 {
-                        sqlite3_finalize(nodeStatement)
-                        break
-                    }
 
                     // Add children to queue if they could contain valid candidates
-                    let minChildDistance = max(1, distance - maxDistance)
+                    let minChildDistance = max(0, distance - maxDistance)
                     let maxChildDistance = distance + maxDistance
 
                     var edgeStatement: OpaquePointer?
@@ -514,7 +506,6 @@ class PredictionService {
 
         return candidates
     }
-
 
     func correctTypo(word: String) -> String? {
         let trimmedWord = word.trimmingCharacters(in: .whitespaces)
