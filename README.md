@@ -4,6 +4,11 @@ A custom iOS keyboard extension implementing the Canary layout with advanced inp
 
 **Fully implemented by Claude Sonnet 4** - this entire codebase is vibe-coded by AI!
 
+## Setup
+
+Run `python3 bin/build_corpus.py` to generate `Keyboard/words.db`. Then deploy
+the app to your iOS device via Xcode.
+
 ## Features
 
 ### Canary Layout
