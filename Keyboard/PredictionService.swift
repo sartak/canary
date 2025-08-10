@@ -93,21 +93,21 @@ class PredictionService {
             let reversedSuffix = String(suffix.reversed())
             query = """
                 SELECT word FROM words
-                WHERE word_lower LIKE ? AND word_lower_reversed LIKE ?
+                WHERE word_lower LIKE ? AND word_lower_reversed LIKE ? AND hidden = 0
                 ORDER BY frequency_rank LIMIT \(Self.maxSuggestions)
             """
             textBindValues = ["\(prefix)%", "\(reversedSuffix)%"]
         } else if !prefix.isEmpty {
             // Prefix only - use parameterized LIKE with SQLITE_TRANSIENT
-            query = "SELECT word FROM words WHERE word_lower LIKE ? ORDER BY frequency_rank LIMIT \(Self.maxSuggestions)"
+            query = "SELECT word FROM words WHERE word_lower LIKE ? AND hidden = 0 ORDER BY frequency_rank LIMIT \(Self.maxSuggestions)"
             textBindValues = ["\(prefix)%"]
         } else if !suffix.isEmpty {
             // Suffix only - use suffix table
             let reversedSuffix = String(suffix.reversed())
-            query = "SELECT word FROM words_by_suffix WHERE word_lower_reversed LIKE ? ORDER BY frequency_rank LIMIT \(Self.maxSuggestions)"
+            query = "SELECT word FROM words_by_suffix WHERE word_lower_reversed LIKE ? AND hidden = 0 ORDER BY frequency_rank LIMIT \(Self.maxSuggestions)"
             textBindValues = ["\(reversedSuffix)%"]
         } else {
-            query = "SELECT word FROM words ORDER BY frequency_rank LIMIT \(Self.maxSuggestions)"
+            query = "SELECT word FROM words WHERE hidden = 0 ORDER BY frequency_rank LIMIT \(Self.maxSuggestions)"
             textBindValues = []
         }
 
@@ -452,7 +452,7 @@ class PredictionService {
 
             // Get word for current node
             var nodeStatement: OpaquePointer?
-            let nodeQuery = "SELECT word, frequency_rank FROM bk_nodes WHERE node_id = ?"
+            let nodeQuery = "SELECT word, frequency_rank, hidden FROM bk_nodes WHERE node_id = ?"
 
             if sqlite3_prepare_v2(db, nodeQuery, -1, &nodeStatement, nil) == SQLITE_OK {
                 sqlite3_bind_int(nodeStatement, 1, Int32(nodeId))
@@ -461,10 +461,11 @@ class PredictionService {
                     let nodeWordPtr = sqlite3_column_text(nodeStatement, 0)
                     let nodeWord = String(cString: nodeWordPtr!)
                     let frequencyRank = Int(sqlite3_column_int(nodeStatement, 1))
+                    let isHidden = Int(sqlite3_column_int(nodeStatement, 2))
 
                     let distance = levenshteinDistance(word, nodeWord)
 
-                    if distance <= maxDistance {
+                    if distance <= maxDistance && isHidden == 0 {
                         candidates.append((nodeWord, distance, frequencyRank))
                     }
 

@@ -41,6 +41,17 @@ def load_word_frequencies(filepath: str) -> Dict[str, Tuple[str, int]]:
     return frequencies
 
 
+def load_hidden_words(filepath: str) -> Set[str]:
+    """Load hidden words into a set for fast lookup."""
+    hidden = set()
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            word = line.strip().lower()
+            if word:
+                hidden.add(word)
+    return hidden
+
+
 def levenshtein_distance(s1: str, s2: str) -> int:
     """Calculate Levenshtein edit distance between two strings."""
     if len(s1) < len(s2):
@@ -75,7 +86,8 @@ class BKTreeBuilder:
             CREATE TABLE IF NOT EXISTS bk_nodes (
                 node_id INTEGER PRIMARY KEY,
                 word TEXT NOT NULL,
-                frequency_rank INTEGER NOT NULL
+                frequency_rank INTEGER NOT NULL,
+                hidden INTEGER NOT NULL DEFAULT 0
             )
         ''')
 
@@ -92,7 +104,7 @@ class BKTreeBuilder:
         # Index for efficient tree traversal
         self.conn.execute('CREATE INDEX IF NOT EXISTS idx_bk_edges_parent_dist ON bk_edges (parent_id, distance)')
 
-    def insert_into_tree(self, root_id: Optional[int], word: str, frequency_rank: int) -> int:
+    def insert_into_tree(self, root_id: Optional[int], word: str, frequency_rank: int, is_hidden: int) -> int:
         """Insert word into BK-Tree, returning the node ID."""
         # Create new node
         if root_id is None:
@@ -103,8 +115,8 @@ class BKTreeBuilder:
             self.node_id += 1
             node_id = self.node_id
 
-        self.conn.execute('INSERT INTO bk_nodes (node_id, word, frequency_rank) VALUES (?, ?, ?)',
-                         (node_id, word, frequency_rank))
+        self.conn.execute('INSERT INTO bk_nodes (node_id, word, frequency_rank, hidden) VALUES (?, ?, ?, ?)',
+                         (node_id, word, frequency_rank, is_hidden))
 
         if root_id is None:
             # This is the root
@@ -139,7 +151,7 @@ class BKTreeBuilder:
 
         return node_id
 
-    def build_tree(self, filtered_words: List[Tuple[str, int]]):
+    def build_tree(self, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
         """Build the complete BK-Tree from filtered words."""
         print("Building BK-Tree...")
 
@@ -152,15 +164,16 @@ class BKTreeBuilder:
 
         for i, (word, frequency) in enumerate(filtered_words):
             frequency_rank = i + 1  # Rank based on position in sorted list
+            is_hidden = 1 if word.lower() in hidden_words else 0
 
             if i % 5000 == 0:
                 print(f"Processed {i}/{len(filtered_words)} words...")
                 self.conn.commit()  # Periodic commit
 
             if root_id is None:
-                root_id = self.insert_into_tree(None, word, frequency_rank)
+                root_id = self.insert_into_tree(None, word, frequency_rank, is_hidden)
             else:
-                self.insert_into_tree(root_id, word, frequency_rank)
+                self.insert_into_tree(root_id, word, frequency_rank, is_hidden)
 
         self.conn.commit()
         print(f"BK-Tree built successfully with {len(filtered_words)} nodes")
@@ -174,6 +187,7 @@ def create_database_tables(conn: sqlite3.Connection):
             word_lower_reversed TEXT NOT NULL,
             frequency_rank INTEGER NOT NULL,
             word TEXT NOT NULL,
+            hidden INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (word_lower, frequency_rank)
         ) WITHOUT ROWID
     ''')
@@ -184,6 +198,7 @@ def create_database_tables(conn: sqlite3.Connection):
             frequency_rank INTEGER NOT NULL,
             word TEXT NOT NULL,
             word_lower TEXT NOT NULL,
+            hidden INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (word_lower_reversed, frequency_rank)
         ) WITHOUT ROWID
     ''')
@@ -191,7 +206,7 @@ def create_database_tables(conn: sqlite3.Connection):
     conn.commit()
 
 
-def populate_database(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]]):
+def populate_database(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
     """Populate the database tables with filtered words."""
     print("Populating database tables...")
 
@@ -206,21 +221,22 @@ def populate_database(conn: sqlite3.Connection, filtered_words: List[Tuple[str, 
     for rank, (word, frequency) in enumerate(filtered_words, 1):
         word_lower = word.lower()
         word_lower_reversed = word_lower[::-1]
+        is_hidden = 1 if word_lower in hidden_words else 0
 
         # Data for words table
-        words_data.append((word_lower, word_lower_reversed, rank, word))
+        words_data.append((word_lower, word_lower_reversed, rank, word, is_hidden))
 
         # Data for words_by_suffix table
-        words_by_suffix_data.append((word_lower_reversed, rank, word, word_lower))
+        words_by_suffix_data.append((word_lower_reversed, rank, word, word_lower, is_hidden))
 
     # Batch insert for performance
     conn.executemany(
-        'INSERT INTO words (word_lower, word_lower_reversed, frequency_rank, word) VALUES (?, ?, ?, ?)',
+        'INSERT INTO words (word_lower, word_lower_reversed, frequency_rank, word, hidden) VALUES (?, ?, ?, ?, ?)',
         words_data
     )
 
     conn.executemany(
-        'INSERT INTO words_by_suffix (word_lower_reversed, frequency_rank, word, word_lower) VALUES (?, ?, ?, ?)',
+        'INSERT INTO words_by_suffix (word_lower_reversed, frequency_rank, word, word_lower, hidden) VALUES (?, ?, ?, ?, ?)',
         words_by_suffix_data
     )
 
@@ -238,13 +254,17 @@ def build_filtered_corpus():
     word_frequencies = load_word_frequencies('corpus/word_frequencies.txt')
     print(f"Loaded {len(word_frequencies)} word frequencies")
 
+    print("Loading hidden words...")
+    hidden_words = load_hidden_words('corpus/hidden_words.txt')
+    print(f"Loaded {len(hidden_words)} hidden words")
+
     print("Filtering words...")
     filtered_words = []
     for word_lower, (original_word, frequency) in word_frequencies.items():
-        if word_lower in legitimate_words:
+        if word_lower in legitimate_words or word_lower in hidden_words:
             filtered_words.append((original_word, frequency))
 
-    print(f"Found {len(filtered_words)} words that are both frequent and legitimate")
+    print(f"Found {len(filtered_words)} words that are both frequent and legitimate or hidden")
 
     # Sort by frequency (descending)
     filtered_words.sort(key=lambda x: x[1], reverse=True)
@@ -261,11 +281,11 @@ def build_filtered_corpus():
     conn = sqlite3.connect('Keyboard/words.db')
     try:
         create_database_tables(conn)
-        populate_database(conn, filtered_words)
+        populate_database(conn, filtered_words, hidden_words)
 
         # Build BK-tree for typo correction
         bk_builder = BKTreeBuilder(conn)
-        bk_builder.build_tree(filtered_words)
+        bk_builder.build_tree(filtered_words, hidden_words)
 
     finally:
         conn.close()
