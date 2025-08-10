@@ -504,6 +504,12 @@ class PredictionService {
     func correctTypo(word: String) -> String? {
         let trimmedWord = word.trimmingCharacters(in: .whitespaces)
 
+        // Skip correction for strings containing numbers or special characters
+        // Typo correction is only for pure alphabetic words
+        if !trimmedWord.allSatisfy({ $0.isLetter }) {
+            return nil
+        }
+
         // Check if word exists in dictionary and apply smart capitalization
         if let canonicalWord = getCanonicalWord(trimmedWord) {
             // Apply smart capitalization based on user input
