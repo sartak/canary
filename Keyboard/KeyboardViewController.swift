@@ -319,6 +319,7 @@ class KeyboardViewController: UIInputViewController {
 
     private func performKeyAction(_ keyData: KeyData) {
         keyData.key.didTap(textDocumentProxy: textDocumentProxy,
+                              predictionService: predictionService,
                               layerSwitchHandler: { [weak self] newLayer in
                                   self?.switchToLayer(newLayer)
                               },
@@ -334,7 +335,10 @@ class KeyboardViewController: UIInputViewController {
                               globeHandler: { [weak self] in
                                   self?.advanceToNextInputMode()
                               },
-                              maybePunctuating: maybePunctuating)
+                              maybePunctuating: maybePunctuating,
+                              autocorrectVisualHandler: { [weak self] originalWord, correctedWord, _ in
+                                  self?.showAutocorrectFeedback(from: originalWord, to: correctedWord, for: keyData)
+                              })
 
         // Provide haptic feedback for each repeat
         HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
@@ -647,6 +651,24 @@ class KeyboardViewController: UIInputViewController {
         guard let popout = keyPopouts[keyData.index] else { return }
         popout.removeFromSuperview()
         keyPopouts.removeValue(forKey: keyData.index)
+    }
+
+    private func showAutocorrectFeedback(from originalWord: String, to correctedWord: String, for keyData: KeyData) {
+        // Calculate position above the key that triggered the autocorrect
+        let keyCenter = CGPoint(
+            x: keyData.frame.midX,
+            y: keyData.frame.midY
+        )
+
+        // Show the autocorrect popout
+        AutocorrectPopoutView.showAutocorrection(
+            from: originalWord,
+            to: correctedWord,
+            at: keyCenter,
+            in: view,
+            deviceLayout: deviceLayout,
+            traitCollection: traitCollection
+        )
     }
 
 

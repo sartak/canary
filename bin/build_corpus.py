@@ -5,12 +5,12 @@ Build filtered word corpus from word frequencies and legitimate words list.
 Loads word_frequencies.txt (word + frequency pairs) and filters to only include
 words that appear in legitimate_words.txt, then outputs the filtered list
 sorted by frequency to corpus/words.txt and creates Keyboard/words.db with
-populated tables.
+populated tables including BK-tree for typo correction.
 """
 
 import sqlite3
 import sys
-from typing import Dict, Set, List, Tuple
+from typing import Dict, Set, List, Tuple, Optional
 
 
 def load_legitimate_words(filepath: str) -> Set[str]:
@@ -39,6 +39,131 @@ def load_word_frequencies(filepath: str) -> Dict[str, Tuple[str, int]]:
                 except ValueError:
                     continue
     return frequencies
+
+
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """Calculate Levenshtein edit distance between two strings."""
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+
+    if len(s2) == 0:
+        return len(s1)
+
+    previous_row = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    return previous_row[-1]
+
+
+class BKTreeBuilder:
+    """Builds a BK-Tree from word list and stores it in SQLite."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+        self.node_id = 0
+
+    def create_bk_tables(self):
+        """Create BK-Tree tables in database."""
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS bk_nodes (
+                node_id INTEGER PRIMARY KEY,
+                word TEXT NOT NULL,
+                frequency_rank INTEGER NOT NULL
+            )
+        ''')
+
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS bk_edges (
+                parent_id INTEGER NOT NULL,
+                child_id INTEGER NOT NULL,
+                distance INTEGER NOT NULL,
+                FOREIGN KEY (parent_id) REFERENCES bk_nodes (node_id),
+                FOREIGN KEY (child_id) REFERENCES bk_nodes (node_id)
+            )
+        ''')
+
+        # Index for efficient tree traversal
+        self.conn.execute('CREATE INDEX IF NOT EXISTS idx_bk_edges_parent_dist ON bk_edges (parent_id, distance)')
+
+    def insert_into_tree(self, root_id: Optional[int], word: str, frequency_rank: int) -> int:
+        """Insert word into BK-Tree, returning the node ID."""
+        # Create new node
+        if root_id is None:
+            # Root node always has ID 1
+            node_id = 1
+            self.node_id = 1
+        else:
+            self.node_id += 1
+            node_id = self.node_id
+
+        self.conn.execute('INSERT INTO bk_nodes (node_id, word, frequency_rank) VALUES (?, ?, ?)',
+                         (node_id, word, frequency_rank))
+
+        if root_id is None:
+            # This is the root
+            return node_id
+
+        # Find the correct position in the tree
+        current_id = root_id
+
+        while True:
+            # Get current node's word
+            cursor = self.conn.execute('SELECT word FROM bk_nodes WHERE node_id = ?', (current_id,))
+            current_word = cursor.fetchone()[0]
+
+            # Calculate distance to current node
+            distance = levenshtein_distance(word, current_word)
+
+            # Check if there's already a child at this distance
+            cursor = self.conn.execute(
+                'SELECT child_id FROM bk_edges WHERE parent_id = ? AND distance = ?',
+                (current_id, distance)
+            )
+            existing_child = cursor.fetchone()
+
+            if existing_child:
+                # Continue down this path
+                current_id = existing_child[0]
+            else:
+                # Insert edge to new node
+                self.conn.execute('INSERT INTO bk_edges (parent_id, child_id, distance) VALUES (?, ?, ?)',
+                                (current_id, node_id, distance))
+                break
+
+        return node_id
+
+    def build_tree(self, filtered_words: List[Tuple[str, int]]):
+        """Build the complete BK-Tree from filtered words."""
+        print("Building BK-Tree...")
+
+        # Clear existing BK-Tree tables
+        self.conn.execute('DROP TABLE IF EXISTS bk_edges')
+        self.conn.execute('DROP TABLE IF EXISTS bk_nodes')
+        self.create_bk_tables()
+
+        root_id = None
+
+        for i, (word, frequency) in enumerate(filtered_words):
+            frequency_rank = i + 1  # Rank based on position in sorted list
+
+            if i % 5000 == 0:
+                print(f"Processed {i}/{len(filtered_words)} words...")
+                self.conn.commit()  # Periodic commit
+
+            if root_id is None:
+                root_id = self.insert_into_tree(None, word, frequency_rank)
+            else:
+                self.insert_into_tree(root_id, word, frequency_rank)
+
+        self.conn.commit()
+        print(f"BK-Tree built successfully with {len(filtered_words)} nodes")
 
 
 def create_database_tables(conn: sqlite3.Connection):
@@ -137,10 +262,15 @@ def build_filtered_corpus():
     try:
         create_database_tables(conn)
         populate_database(conn, filtered_words)
+
+        # Build BK-tree for typo correction
+        bk_builder = BKTreeBuilder(conn)
+        bk_builder.build_tree(filtered_words)
+
     finally:
         conn.close()
 
-    print("Database created and populated successfully")
+    print("Database created and populated successfully with BK-tree")
 
 
 def main():

@@ -66,13 +66,77 @@ struct Key {
         return !(text.count == 1 && noTrailingSpaceCharacters.contains(text.first!))
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, maybePunctuating: Bool) {
+    static func autocorrectWord(_ word: String, using predictionService: PredictionService) -> String {
+        let trimmedWord = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedWord.isEmpty else { return word }
+
+        return predictionService.correctTypo(word: trimmedWord) ?? word
+    }
+
+    static func getCurrentWord(from textDocumentProxy: UITextDocumentProxy) -> (word: String, range: NSRange)? {
+        guard let beforeInput = textDocumentProxy.documentContextBeforeInput else {
+            return nil
+        }
+
+        // Find the start of the current word by looking backward from cursor
+        var wordStart = beforeInput.count
+        for (index, char) in beforeInput.reversed().enumerated() {
+            if char.isWhitespace || char.isPunctuation {
+                wordStart = beforeInput.count - index
+                break
+            }
+            if index == beforeInput.count - 1 {
+                wordStart = 0
+            }
+        }
+
+        // Extract the current word
+        let wordStartIndex = beforeInput.index(beforeInput.startIndex, offsetBy: wordStart)
+        let currentWord = String(beforeInput[wordStartIndex...])
+
+        if currentWord.isEmpty {
+            return nil
+        }
+
+        return (word: currentWord, range: NSRange(location: wordStart, length: currentWord.count))
+    }
+
+    static func replaceCurrentWord(in textDocumentProxy: UITextDocumentProxy, with newWord: String) {
+        guard let wordInfo = getCurrentWord(from: textDocumentProxy) else { return }
+
+        // Delete the current word
+        for _ in 0..<wordInfo.word.count {
+            textDocumentProxy.deleteBackward()
+        }
+
+        // Insert the corrected word
+        textDocumentProxy.insertText(newWord)
+    }
+
+    static func applyAutocorrectWithVisual(to textDocumentProxy: UITextDocumentProxy, at position: CGPoint, using predictionService: PredictionService, visualHandler: @escaping (String, String, CGPoint) -> Void) {
+        guard let wordInfo = getCurrentWord(from: textDocumentProxy) else { return }
+        let correctedWord = autocorrectWord(wordInfo.word, using: predictionService)
+
+        // Only show visual feedback and apply correction if the word actually changed
+        if correctedWord != wordInfo.word {
+            visualHandler(wordInfo.word, correctedWord, position)
+            replaceCurrentWord(in: textDocumentProxy, with: correctedWord)
+        }
+    }
+
+    func didTap(textDocumentProxy: UITextDocumentProxy, predictionService: PredictionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, maybePunctuating: Bool, autocorrectVisualHandler: @escaping (String, String, CGPoint) -> Void = { _, _, _ in }) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
-            // Remove trailing space before punctuation if maybePunctuating is true
-            if Key.shouldUnspacePunctuation(text) && maybePunctuating {
-                textDocumentProxy.deleteBackward()
+            // Check if this is punctuation that ends a word - apply autocorrect first
+            if Key.shouldUnspacePunctuation(text) {
+                // Apply autocorrect with visual feedback
+                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+
+                // Handle spacing for punctuation
+                if maybePunctuating {
+                    textDocumentProxy.deleteBackward()
+                }
                 let trailingSpace = (maybePunctuating && Key.shouldAddTrailingSpaceAfterPunctuation(text)) ? " " : ""
                 textDocumentProxy.insertText(text + trailingSpace)
             } else {
@@ -83,8 +147,12 @@ struct Key {
         case .shift:
             shiftHandler()
         case .enter:
+            // Apply autocorrect with visual feedback before line break
+            Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
             textDocumentProxy.insertText("\n")
         case .space:
+            // Apply autocorrect with visual feedback before inserting space
+            Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):
             layerSwitchHandler(layer)

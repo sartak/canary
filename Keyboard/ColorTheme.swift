@@ -92,4 +92,13 @@ enum ColorTheme {
     var predictionDividerColor: UIColor {
         return textColor.withAlphaComponent(0.1)
     }
+
+    var autocorrectColor: UIColor {
+        switch self {
+        case .dark:
+            return UIColor.systemOrange.withAlphaComponent(0.9)
+        case .light:
+            return UIColor.systemOrange.withAlphaComponent(0.8)
+        }
+    }
 }

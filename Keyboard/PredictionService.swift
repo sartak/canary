@@ -10,6 +10,7 @@ enum PredictionAction {
 class PredictionService {
     private static let maxSuggestions = 20
     private var db: OpaquePointer?
+    private var dbPath: String?
 
     // Cache most common words (no prefix/suffix) since they're queried frequently
     private static var commonWords: [String]?
@@ -19,21 +20,33 @@ class PredictionService {
     private var selectedText: String?
     private var cachedSuggestions: [(String, [PredictionAction])]?
 
+    // Proactive typo correction state
+    private var currentSearchWord: String = ""
+    private var proactiveCandidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
+    private var backgroundQueue: DispatchQueue
+    private var backgroundDB: OpaquePointer?
+    private var searchTask: DispatchWorkItem?
+
     init() {
+        backgroundQueue = DispatchQueue(label: "typo-correction", qos: .userInitiated)
         openDatabase()
+        openBackgroundDatabase()
     }
 
     deinit {
         closeDatabase()
+        closeBackgroundDatabase()
     }
 
     private func openDatabase() {
-        guard let dbPath = Bundle(for: PredictionService.self).path(forResource: "words", ofType: "db") else {
+        guard let path = Bundle(for: PredictionService.self).path(forResource: "words", ofType: "db") else {
             print("PredictionService: Could not find words.db in keyboard extension bundle")
             return
         }
 
-        if sqlite3_open(dbPath, &db) != SQLITE_OK {
+        dbPath = path
+
+        if sqlite3_open(path, &db) != SQLITE_OK {
             print("PredictionService: Error opening database: \(String(cString: sqlite3_errmsg(db)))")
             closeDatabase()
         }
@@ -43,6 +56,22 @@ class PredictionService {
         if db != nil {
             sqlite3_close(db)
             db = nil
+        }
+    }
+
+    private func openBackgroundDatabase() {
+        guard let dbPath = dbPath else { return }
+
+        if sqlite3_open(dbPath, &backgroundDB) != SQLITE_OK {
+            print("PredictionService: Error opening background database: \(String(cString: sqlite3_errmsg(backgroundDB)))")
+            closeBackgroundDatabase()
+        }
+    }
+
+    private func closeBackgroundDatabase() {
+        if backgroundDB != nil {
+            sqlite3_close(backgroundDB)
+            backgroundDB = nil
         }
     }
 
@@ -122,6 +151,59 @@ class PredictionService {
         self.contextAfter = after
         self.selectedText = selected
         self.cachedSuggestions = nil
+
+        // Update proactive typo correction
+        updateProactiveTypoCorrection()
+    }
+
+    private func updateProactiveTypoCorrection() {
+        let (prefix, _) = extractCurrentWordContext()
+        let newWord = prefix.lowercased()
+
+        // Only start new search if word changed
+        if newWord != currentSearchWord {
+            currentSearchWord = newWord
+
+            // Cancel any existing search
+            searchTask?.cancel()
+
+            if newWord.isEmpty {
+                proactiveCandidates = []
+                return
+            }
+
+            print("ProactiveTypo: Starting background search for '\(newWord)'")
+
+            // Start new background search
+            let task = DispatchWorkItem { [weak self] in
+                guard let self = self, let backgroundDB = self.backgroundDB else { return }
+
+                let startTime = CFAbsoluteTimeGetCurrent()
+
+                // Check if search was cancelled by checking if current word changed
+                if newWord != self.currentSearchWord {
+                    print("ProactiveTypo: '\(newWord)' search cancelled before query")
+                    return
+                }
+
+                let candidates = self.queryBKTreeWithDB(db: backgroundDB, word: newWord, maxDistance: 2)
+                let queryTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+
+                // Update results on main thread
+                DispatchQueue.main.async {
+                    // Only update if this search is still current (not cancelled)
+                    if newWord == self.currentSearchWord {
+                        self.proactiveCandidates = candidates
+                        print("ProactiveTypo: '\(newWord)' completed, found \(candidates.count) candidates in \(String(format: "%.1f", queryTime))ms")
+                    } else {
+                        print("ProactiveTypo: '\(newWord)' search was cancelled or obsolete")
+                    }
+                }
+            }
+
+            searchTask = task
+            backgroundQueue.async(execute: task)
+        }
     }
 
     func getSuggestions() -> [(String, [PredictionAction])] {
@@ -299,5 +381,209 @@ class PredictionService {
         }
 
         return (prefix, suffix)
+    }
+
+    // MARK: - Typo Correction
+
+    private func levenshteinDistance(_ s1: String, _ s2: String) -> Int {
+        let a = Array(s1)
+        let b = Array(s2)
+
+        if a.isEmpty { return b.count }
+        if b.isEmpty { return a.count }
+
+        var previousRow = Array(0...b.count)
+
+        for (i, aChar) in a.enumerated() {
+            var currentRow = [i + 1]
+
+            for (j, bChar) in b.enumerated() {
+                let insertions = previousRow[j + 1] + 1
+                let deletions = currentRow[j] + 1
+                let substitutions = previousRow[j] + (aChar == bChar ? 0 : 1)
+                currentRow.append(min(insertions, deletions, substitutions))
+            }
+
+            previousRow = currentRow
+        }
+
+        return previousRow.last!
+    }
+
+    private func wordExists(_ word: String) -> Bool {
+        guard let db = db else { return false }
+
+        let query = "SELECT 1 FROM words WHERE word_lower = ? LIMIT 1"
+        var statement: OpaquePointer?
+        var exists = false
+
+        if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
+            sqlite3_bind_text(statement, 1, word.lowercased(), -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+
+            if sqlite3_step(statement) == SQLITE_ROW {
+                exists = true
+            }
+        }
+
+        sqlite3_finalize(statement)
+        return exists
+    }
+
+    private func queryBKTree(word: String, maxDistance: Int) -> [(String, Int, Int)] {
+        guard let db = db else { return [] }
+        return queryBKTreeWithDB(db: db, word: word, maxDistance: maxDistance)
+    }
+
+    private func queryBKTreeWithDB(db: OpaquePointer, word: String, maxDistance: Int) -> [(String, Int, Int)] {
+
+        var candidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
+        var queue: [Int] = [1] // Just node_ids for simpler queue
+        var visited: Set<Int> = [] // Avoid revisiting nodes
+        var nodesExplored = 0
+
+        while !queue.isEmpty && nodesExplored < 2000 { // Limit exploration to prevent runaway queries
+            let nodeId = queue.removeFirst()
+
+            if visited.contains(nodeId) {
+                continue
+            }
+            visited.insert(nodeId)
+            nodesExplored += 1
+
+            // Get word for current node
+            var nodeStatement: OpaquePointer?
+            let nodeQuery = "SELECT word, frequency_rank FROM bk_nodes WHERE node_id = ?"
+
+            if sqlite3_prepare_v2(db, nodeQuery, -1, &nodeStatement, nil) == SQLITE_OK {
+                sqlite3_bind_int(nodeStatement, 1, Int32(nodeId))
+
+                if sqlite3_step(nodeStatement) == SQLITE_ROW {
+                    let nodeWordPtr = sqlite3_column_text(nodeStatement, 0)
+                    let nodeWord = String(cString: nodeWordPtr!)
+                    let frequencyRank = Int(sqlite3_column_int(nodeStatement, 1))
+
+                    let distance = levenshteinDistance(word, nodeWord)
+
+                    if distance <= maxDistance {
+                        candidates.append((nodeWord, distance, frequencyRank))
+                    }
+
+                    // Early exit only if we have multiple distance-1 candidates
+                    let distance1Count = candidates.filter { $0.1 == 1 }.count
+                    if distance1Count >= 5 {
+                        sqlite3_finalize(nodeStatement)
+                        break
+                    }
+
+                    // Add children to queue if they could contain valid candidates
+                    let minChildDistance = max(1, distance - maxDistance)
+                    let maxChildDistance = distance + maxDistance
+
+                    var edgeStatement: OpaquePointer?
+                    let edgeQuery = "SELECT child_id FROM bk_edges WHERE parent_id = ? AND distance >= ? AND distance <= ?"
+
+                    if sqlite3_prepare_v2(db, edgeQuery, -1, &edgeStatement, nil) == SQLITE_OK {
+                        sqlite3_bind_int(edgeStatement, 1, Int32(nodeId))
+                        sqlite3_bind_int(edgeStatement, 2, Int32(minChildDistance))
+                        sqlite3_bind_int(edgeStatement, 3, Int32(maxChildDistance))
+
+                        while sqlite3_step(edgeStatement) == SQLITE_ROW {
+                            let childId = Int(sqlite3_column_int(edgeStatement, 0))
+                            if !visited.contains(childId) {
+                                queue.append(childId)
+                            }
+                        }
+                    }
+
+                    sqlite3_finalize(edgeStatement)
+                }
+            }
+
+            sqlite3_finalize(nodeStatement)
+        }
+
+        return candidates
+    }
+
+
+    func correctTypo(word: String) -> String? {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let trimmedWord = word.trimmingCharacters(in: .whitespaces)
+
+        // Return nil if word exists in dictionary
+        let existsCheckStart = CFAbsoluteTimeGetCurrent()
+        if wordExists(trimmedWord) {
+            let totalTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+            print("TypoCorrection: '\(trimmedWord)' exists in dictionary, total: \(String(format: "%.2f", totalTime))ms")
+            return nil
+        }
+        let existsCheckTime = (CFAbsoluteTimeGetCurrent() - existsCheckStart) * 1000
+
+        // Use pre-computed proactive candidates if available and current
+        var candidates: [(String, Int, Int)]
+        var queryTime: Double
+
+        if trimmedWord.lowercased() == currentSearchWord {
+            if !proactiveCandidates.isEmpty {
+                // Use pre-computed candidates
+                queryTime = 0.0
+                candidates = proactiveCandidates
+                print("TypoCorrection: Using proactive candidates for '\(trimmedWord)'")
+            } else if let task = searchTask, !task.isCancelled {
+                // Wait for the ongoing proactive search to complete
+                let queryStart = CFAbsoluteTimeGetCurrent()
+                print("TypoCorrection: Waiting for proactive search to complete for '\(trimmedWord)'")
+
+                // Wait for the task to complete
+                task.wait()
+
+                queryTime = (CFAbsoluteTimeGetCurrent() - queryStart) * 1000
+                candidates = proactiveCandidates
+                print("TypoCorrection: Proactive search completed, using results for '\(trimmedWord)'")
+            } else {
+                // No proactive search running, do synchronous search
+                let queryStart = CFAbsoluteTimeGetCurrent()
+                candidates = queryBKTree(word: trimmedWord, maxDistance: 2)
+                queryTime = (CFAbsoluteTimeGetCurrent() - queryStart) * 1000
+                print("TypoCorrection: No proactive search, using synchronous search for '\(trimmedWord)'")
+            }
+        } else {
+            // Different word, do synchronous search
+            let queryStart = CFAbsoluteTimeGetCurrent()
+            candidates = queryBKTree(word: trimmedWord, maxDistance: 2)
+            queryTime = (CFAbsoluteTimeGetCurrent() - queryStart) * 1000
+            print("TypoCorrection: Different word, using synchronous search for '\(trimmedWord)' (was searching for '\(currentSearchWord)')")
+        }
+
+        // Return nil if no candidates found
+        if candidates.isEmpty {
+            let totalTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+            print("TypoCorrection: '\(trimmedWord)' no candidates found, exists: \(String(format: "%.2f", existsCheckTime))ms, query: \(String(format: "%.2f", queryTime))ms, total: \(String(format: "%.2f", totalTime))ms")
+            return nil
+        }
+
+        // Find best candidate: lowest distance, then lowest frequency_rank (higher frequency)
+        let bestCandidate = candidates.min { a, b in
+            if a.1 != b.1 {
+                return a.1 < b.1 // Lower distance is better
+            }
+            return a.2 < b.2 // Lower frequency_rank is better (higher frequency)
+        }
+
+        let totalTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+
+        // Debug: show top candidates by distance and frequency
+        let sortedCandidates = candidates.sorted { a, b in
+            if a.1 != b.1 {
+                return a.1 < b.1 // Lower distance first
+            }
+            return a.2 < b.2 // Lower frequency_rank (higher frequency) first
+        }
+        let topCandidates = Array(sortedCandidates.prefix(10))
+        let candidateStr = topCandidates.map { "'\($0.0)'(d\($0.1),f\($0.2))" }.joined(separator: ", ")
+
+        print("TypoCorrection: '\(trimmedWord)' → '\(bestCandidate?.0 ?? "nil")' (\(candidates.count) candidates: \(candidateStr)), exists: \(String(format: "%.2f", existsCheckTime))ms, query: \(String(format: "%.2f", queryTime))ms, total: \(String(format: "%.2f", totalTime))ms")
+
+        return bestCandidate?.0
     }
 }
