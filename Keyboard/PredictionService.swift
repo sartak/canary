@@ -469,7 +469,6 @@ class PredictionService {
     private func queryBKTreeWithDB(db: OpaquePointer, word: String, maxDistance: Int, task: DispatchWorkItem?) -> [(String, Int, Int)]? {
         var candidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
         var queue: [Int] = [1] // Just node_ids for simpler queue
-        var visited: Set<Int> = [] // Avoid revisiting nodes
         var nodesExplored = 0
 
         while !queue.isEmpty {
@@ -479,11 +478,6 @@ class PredictionService {
             }
 
             let nodeId = queue.removeFirst()
-
-            if visited.contains(nodeId) {
-                continue
-            }
-            visited.insert(nodeId)
             nodesExplored += 1
 
             // Get word for current node
@@ -521,9 +515,7 @@ class PredictionService {
                             let edgeStepResult = sqlite3_step(edgeStatement)
                             if edgeStepResult == SQLITE_ROW {
                                 let childId = Int(sqlite3_column_int(edgeStatement, 0))
-                                if !visited.contains(childId) {
-                                    queue.append(childId)
-                                }
+                                queue.append(childId)
                             } else if edgeStepResult == SQLITE_INTERRUPT {
                                 sqlite3_finalize(edgeStatement)
                                 sqlite3_finalize(nodeStatement)
