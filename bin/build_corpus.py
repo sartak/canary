@@ -2,10 +2,10 @@
 """
 Build filtered word corpus from word frequencies and legitimate words list.
 
-Loads word_frequencies.txt (word + frequency pairs) and filters to only include
+Loads word_frequencies.txt (ordered word list) and filters to only include
 words that appear in legitimate_words.txt, then outputs the filtered list
-sorted by frequency to corpus/words.txt and creates Keyboard/words.db with
-populated tables including BK-tree for typo correction.
+to corpus/words.txt and creates Keyboard/words.db with populated tables
+including BK-tree for typo correction.
 """
 
 import sqlite3
@@ -24,21 +24,16 @@ def load_legitimate_words(filepath: str) -> Set[str]:
     return legitimate
 
 
-def load_word_frequencies(filepath: str) -> Dict[str, Tuple[str, int]]:
-    """Load word frequencies from tab-separated file, preserving original capitalization."""
-    frequencies = {}
+def load_word_list(filepath: str) -> Dict[str, Tuple[str, int]]:
+    """Load ordered word list, preserving original capitalization and assigning rank as frequency."""
+    word_list = {}
     with open(filepath, 'r', encoding='utf-8') as f:
-        for line in f:
-            parts = line.strip().split('\t')
-            if len(parts) == 2:
-                original_word = parts[0]
+        for rank, line in enumerate(f, 1):
+            original_word = line.strip()
+            if original_word:
                 word_lower = original_word.lower()
-                try:
-                    frequency = int(parts[1])
-                    frequencies[word_lower] = (original_word, frequency)
-                except ValueError:
-                    continue
-    return frequencies
+                word_list[word_lower] = (original_word, rank)
+    return word_list
 
 
 def load_hidden_words(filepath: str) -> Set[str]:
@@ -162,7 +157,7 @@ class BKTreeBuilder:
 
         root_id = None
 
-        for i, (word, frequency) in enumerate(filtered_words):
+        for i, (word, rank) in enumerate(filtered_words):
             frequency_rank = i + 1  # Rank based on position in sorted list
             is_hidden = 1 if word.lower() in hidden_words else 0
 
@@ -218,7 +213,7 @@ def populate_database(conn: sqlite3.Connection, filtered_words: List[Tuple[str, 
     words_data = []
     words_by_suffix_data = []
 
-    for rank, (word, frequency) in enumerate(filtered_words, 1):
+    for rank, (word, original_rank) in enumerate(filtered_words, 1):
         word_lower = word.lower()
         word_lower_reversed = word_lower[::-1]
         is_hidden = 1 if word_lower in hidden_words else 0
@@ -250,9 +245,9 @@ def build_filtered_corpus():
     legitimate_words = load_legitimate_words('corpus/legitimate_words.txt')
     print(f"Loaded {len(legitimate_words)} legitimate words")
 
-    print("Loading word frequencies...")
-    word_frequencies = load_word_frequencies('corpus/word_frequencies.txt')
-    print(f"Loaded {len(word_frequencies)} word frequencies")
+    print("Loading word list...")
+    word_list = load_word_list('corpus/word_frequencies.txt')
+    print(f"Loaded {len(word_list)} words")
 
     print("Loading hidden words...")
     hidden_words = load_hidden_words('corpus/hidden_words.txt')
@@ -260,18 +255,18 @@ def build_filtered_corpus():
 
     print("Filtering words...")
     filtered_words = []
-    for word_lower, (original_word, frequency) in word_frequencies.items():
+    for word_lower, (original_word, rank) in word_list.items():
         if word_lower in legitimate_words or word_lower in hidden_words:
-            filtered_words.append((original_word, frequency))
+            filtered_words.append((original_word, rank))
 
     print(f"Found {len(filtered_words)} words that are both frequent and legitimate or hidden")
 
-    # Sort by frequency (descending)
-    filtered_words.sort(key=lambda x: x[1], reverse=True)
+    # Sort by rank (ascending - lower rank = higher frequency)
+    filtered_words.sort(key=lambda x: x[1])
 
     print("Writing filtered corpus to corpus/words.txt...")
     with open('corpus/words.txt', 'w', encoding='utf-8') as f:
-        for word, frequency in filtered_words:
+        for word, rank in filtered_words:
             f.write(f"{word}\n")
 
     print(f"Successfully wrote {len(filtered_words)} words to corpus/words.txt")
