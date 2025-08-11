@@ -96,7 +96,10 @@ class PredictionView: UIView {
             // First button gets no left padding, others get normal padding
             let leftPadding = index == 0 ? 0 : deviceLayout.predictionGap
             let rightPadding = deviceLayout.predictionGap
-            let buttonWidth = textSize.width + leftPadding + rightPadding
+
+            // Add small buffer to prevent text truncation in UIButton
+            let textBuffer: CGFloat = 4.0
+            let buttonWidth = textSize.width + leftPadding + rightPadding + textBuffer
 
             // Update button configuration with padding
             var config = button.configuration ?? UIButton.Configuration.plain()
