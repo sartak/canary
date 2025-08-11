@@ -87,8 +87,9 @@ struct Key {
 
         // Find the start of the current word by looking backward from cursor
         var wordStart = beforeInput.count
-        for (index, char) in beforeInput.reversed().enumerated() {
-            if char.isWhitespace || char.isPunctuation {
+        for (index, _) in beforeInput.reversed().enumerated() {
+            let currentIndex = beforeInput.index(beforeInput.endIndex, offsetBy: -(index + 1))
+            if !PredictionService.isWordCharacter(in: beforeInput, at: currentIndex) {
                 wordStart = beforeInput.count - index
                 break
             }

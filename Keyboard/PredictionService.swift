@@ -360,7 +360,7 @@ class PredictionService {
         return lastChar.isLetter || ".,!?:;".contains(lastChar)
     }
 
-    private func isWordCharacter(in text: String, at index: String.Index) -> Bool {
+    static func isWordCharacter(in text: String, at index: String.Index) -> Bool {
         let char = text[index]
 
         if char.isLetter {
@@ -383,7 +383,7 @@ class PredictionService {
             // Find the current word by walking backwards from the end until we hit a non-word character
             var wordStart = before.endIndex
             for index in before.indices.reversed() {
-                if isWordCharacter(in: before, at: index) {
+                if Self.isWordCharacter(in: before, at: index) {
                     wordStart = index
                 } else {
                     break
@@ -399,7 +399,7 @@ class PredictionService {
             // Find the suffix by walking forward from the beginning until we hit a non-word character
             var wordEnd = after.startIndex
             for index in after.indices {
-                if isWordCharacter(in: after, at: index) {
+                if Self.isWordCharacter(in: after, at: index) {
                     wordEnd = after.index(after: index)
                 } else {
                     break
@@ -551,9 +551,11 @@ class PredictionService {
         let startTime = CFAbsoluteTimeGetCurrent()
         let trimmedWord = word.trimmingCharacters(in: .whitespaces)
 
-        // Skip correction for strings containing numbers or special characters
-        // Typo correction is only for pure alphabetic words
-        if !trimmedWord.allSatisfy({ $0.isLetter }) {
+        // Skip correction for strings containing invalid characters
+        // Only allow words composed entirely of valid word characters
+        if !trimmedWord.indices.allSatisfy({ index in
+            Self.isWordCharacter(in: trimmedWord, at: index)
+        }) {
             return nil
         }
 
