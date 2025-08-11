@@ -22,10 +22,12 @@ class PredictionService {
 
     // Proactive typo correction state
     private var currentSearchWord: String = ""
-    private var proactiveCandidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
+    private var proactiveCandidates: [(String, Int, Int)]? = nil // nil = not completed, [] = completed with no results, [results] = completed with results
+    private var proactiveSearchTime: Double = 0 // Time spent in database for proactive search
     private var backgroundQueue: DispatchQueue
     private var backgroundDB: OpaquePointer?
     private var searchTask: DispatchWorkItem?
+    private var currentSearchCompletion: ([(String, Int, Int)]?, Double) -> Void = { _, _ in }
 
     init() {
         backgroundQueue = DispatchQueue(label: "typo-correction", qos: .userInitiated)
@@ -177,25 +179,40 @@ class PredictionService {
                 return
             }
 
+            // Mark search as not completed
+            proactiveCandidates = nil
+
 
             // Start new background search
             var task: DispatchWorkItem!
             task = DispatchWorkItem { [weak self] in
-                guard let self = self, let backgroundDB = self.backgroundDB else { return }
+                guard let self = self, let backgroundDB = self.backgroundDB else {
+                    return
+                }
 
                 // Check if search was cancelled by checking if current word changed
                 if newWord != self.currentSearchWord {
                     return
                 }
 
+                let searchStart = CFAbsoluteTimeGetCurrent()
                 let candidates = self.queryBKTreeWithDB(db: backgroundDB, word: newWord, maxDistance: 2, task: task)
+                let searchTime = (CFAbsoluteTimeGetCurrent() - searchStart) * 1000
 
-                // Update results on main thread
-                DispatchQueue.main.async {
-                    // Only update if this search is still current (not cancelled)
-                    if newWord == self.currentSearchWord, let candidates = candidates {
-                        self.proactiveCandidates = candidates
+                // Call completion handler immediately (not on main thread to avoid deadlock)
+                // But update proactiveCandidates on main thread
+                if newWord == self.currentSearchWord {
+                    if let candidates = candidates {
+                        DispatchQueue.main.async {
+                            self.proactiveCandidates = candidates
+                            self.proactiveSearchTime = searchTime
+                        }
+                        self.currentSearchCompletion(candidates, searchTime)
+                    } else {
+                        self.currentSearchCompletion(nil, searchTime)
                     }
+                } else {
+                    self.currentSearchCompletion(nil, searchTime)
                 }
             }
 
@@ -531,6 +548,7 @@ class PredictionService {
     }
 
     func correctTypo(word: String) -> String? {
+        let startTime = CFAbsoluteTimeGetCurrent()
         let trimmedWord = word.trimmingCharacters(in: .whitespaces)
 
         // Skip correction for strings containing numbers or special characters
@@ -540,7 +558,12 @@ class PredictionService {
         }
 
         // Check if word exists in dictionary and apply smart capitalization
+        let dictionaryCheckStart = CFAbsoluteTimeGetCurrent()
         if let canonicalWord = getCanonicalWord(trimmedWord) {
+            let dictionaryTime = (CFAbsoluteTimeGetCurrent() - dictionaryCheckStart) * 1000
+            let totalTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+            print("TypoCorrection: '\(trimmedWord)' -> found in dictionary, db_time: \(String(format: "%.3f", dictionaryTime))ms, user_wait: \(String(format: "%.3f", totalTime))ms")
+
             // Apply smart capitalization based on user input
             let smartCapitalizedWord = applySmartCapitalization(word: canonicalWord, userPrefix: trimmedWord, userSuffix: "")
 
@@ -551,29 +574,70 @@ class PredictionService {
             }
         }
 
-        // Use pre-computed proactive candidates if available and current
+        // Use proactive candidates if available and current
         let candidates: [(String, Int, Int)]?
+        var dbTime: Double = 0
+        var wasCanceled = false
 
         if trimmedWord.lowercased() == currentSearchWord {
-            if !proactiveCandidates.isEmpty {
-                // Use pre-computed candidates
-                candidates = proactiveCandidates
+            if let proactiveResults = proactiveCandidates {
+                // Search already completed proactively - user wait time is essentially 0
+                candidates = proactiveResults
+                dbTime = proactiveSearchTime
             } else if let task = searchTask, !task.isCancelled {
-                // Wait for the ongoing proactive search to complete
-                task.wait()
-                candidates = proactiveCandidates
+                // Search still running - user must wait for completion
+                let semaphore = DispatchSemaphore(value: 0)
+                var taskResults: [(String, Int, Int)]?
+                var totalDbTimeFromTask: Double = 0
+
+                currentSearchCompletion = { results, dbTimeFromTask in
+                    taskResults = results
+                    totalDbTimeFromTask = dbTimeFromTask
+                    semaphore.signal()
+                }
+
+                semaphore.wait()
+
+                if taskResults == nil {
+                    wasCanceled = true
+                    candidates = nil
+                    dbTime = totalDbTimeFromTask // Actual db time even if canceled
+                } else {
+                    candidates = taskResults!
+                    // Use the actual database time from the background task
+                    dbTime = totalDbTimeFromTask
+                }
             } else {
-                // No proactive search running, do synchronous search
-                candidates = queryBKTree(word: trimmedWord, maxDistance: 2)
+                // No search running - no correction
+                candidates = []
             }
         } else {
-            // Different word, do synchronous search
-            candidates = queryBKTree(word: trimmedWord, maxDistance: 2)
+            // Word doesn't match current search - no correction
+            candidates = []
         }
 
-        // Return nil if search was cancelled or no candidates found
-        guard let candidates = candidates else {
+        let totalTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+
+        // Log the result
+        if wasCanceled {
+            print("TypoCorrection: '\(trimmedWord)' -> search canceled, user_wait: \(String(format: "%.3f", totalTime))ms")
             return nil
+        }
+
+        guard let candidates = candidates else {
+            print("TypoCorrection: '\(trimmedWord)' -> search canceled, user_wait: \(String(format: "%.3f", totalTime))ms")
+            return nil
+        }
+
+        let candidateCount = candidates.count
+
+        // Distinguish between proactive (async) vs synchronous completion
+        if trimmedWord.lowercased() == currentSearchWord && proactiveCandidates != nil {
+            // Proactive search completed before user needed it
+            print("TypoCorrection: '\(trimmedWord)' -> \(candidateCount) candidates (async), db_time: \(String(format: "%.3f", dbTime))ms, user_wait: \(String(format: "%.3f", totalTime))ms")
+        } else {
+            // Had to wait for search to complete
+            print("TypoCorrection: '\(trimmedWord)' -> \(candidateCount) candidates (sync), db_time: \(String(format: "%.3f", dbTime))ms, user_wait: \(String(format: "%.3f", totalTime))ms")
         }
 
         if candidates.isEmpty {
