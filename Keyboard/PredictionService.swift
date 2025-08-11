@@ -167,6 +167,11 @@ class PredictionService {
             // Cancel any existing search
             searchTask?.cancel()
 
+            // Interrupt any ongoing SQLite queries on background database
+            if let backgroundDB = backgroundDB {
+                sqlite3_interrupt(backgroundDB)
+            }
+
             if newWord.isEmpty {
                 proactiveCandidates = []
                 return
@@ -174,7 +179,8 @@ class PredictionService {
 
 
             // Start new background search
-            let task = DispatchWorkItem { [weak self] in
+            var task: DispatchWorkItem!
+            task = DispatchWorkItem { [weak self] in
                 guard let self = self, let backgroundDB = self.backgroundDB else { return }
 
                 // Check if search was cancelled by checking if current word changed
@@ -182,12 +188,12 @@ class PredictionService {
                     return
                 }
 
-                let candidates = self.queryBKTreeWithDB(db: backgroundDB, word: newWord, maxDistance: 2)
+                let candidates = self.queryBKTreeWithDB(db: backgroundDB, word: newWord, maxDistance: 2, task: task)
 
                 // Update results on main thread
                 DispatchQueue.main.async {
                     // Only update if this search is still current (not cancelled)
-                    if newWord == self.currentSearchWord {
+                    if newWord == self.currentSearchWord, let candidates = candidates {
                         self.proactiveCandidates = candidates
                     }
                 }
@@ -438,18 +444,23 @@ class PredictionService {
         return canonicalWord
     }
 
-    private func queryBKTree(word: String, maxDistance: Int) -> [(String, Int, Int)] {
+    private func queryBKTree(word: String, maxDistance: Int) -> [(String, Int, Int)]? {
         guard let db = db else { return [] }
-        return queryBKTreeWithDB(db: db, word: word, maxDistance: maxDistance)
+        return queryBKTreeWithDB(db: db, word: word, maxDistance: maxDistance, task: nil)
     }
 
-    private func queryBKTreeWithDB(db: OpaquePointer, word: String, maxDistance: Int) -> [(String, Int, Int)] {
+    private func queryBKTreeWithDB(db: OpaquePointer, word: String, maxDistance: Int, task: DispatchWorkItem?) -> [(String, Int, Int)]? {
         var candidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
         var queue: [Int] = [1] // Just node_ids for simpler queue
         var visited: Set<Int> = [] // Avoid revisiting nodes
         var nodesExplored = 0
 
         while !queue.isEmpty {
+            // Check if search was cancelled
+            if task?.isCancelled == true {
+                return nil
+            }
+
             let nodeId = queue.removeFirst()
 
             if visited.contains(nodeId) {
@@ -465,7 +476,8 @@ class PredictionService {
             if sqlite3_prepare_v2(db, nodeQuery, -1, &nodeStatement, nil) == SQLITE_OK {
                 sqlite3_bind_int(nodeStatement, 1, Int32(nodeId))
 
-                if sqlite3_step(nodeStatement) == SQLITE_ROW {
+                let stepResult = sqlite3_step(nodeStatement)
+                if stepResult == SQLITE_ROW {
                     let nodeWordPtr = sqlite3_column_text(nodeStatement, 0)
                     let nodeWord = String(cString: nodeWordPtr!)
                     let frequencyRank = Int(sqlite3_column_int(nodeStatement, 1))
@@ -475,7 +487,6 @@ class PredictionService {
                     if distance <= maxDistance && isHidden == 0 {
                         candidates.append((nodeWord, distance, frequencyRank))
                     }
-
 
                     // Add children to queue if they could contain valid candidates
                     let minChildDistance = max(0, distance - maxDistance)
@@ -489,15 +500,27 @@ class PredictionService {
                         sqlite3_bind_int(edgeStatement, 2, Int32(minChildDistance))
                         sqlite3_bind_int(edgeStatement, 3, Int32(maxChildDistance))
 
-                        while sqlite3_step(edgeStatement) == SQLITE_ROW {
-                            let childId = Int(sqlite3_column_int(edgeStatement, 0))
-                            if !visited.contains(childId) {
-                                queue.append(childId)
+                        while true {
+                            let edgeStepResult = sqlite3_step(edgeStatement)
+                            if edgeStepResult == SQLITE_ROW {
+                                let childId = Int(sqlite3_column_int(edgeStatement, 0))
+                                if !visited.contains(childId) {
+                                    queue.append(childId)
+                                }
+                            } else if edgeStepResult == SQLITE_INTERRUPT {
+                                sqlite3_finalize(edgeStatement)
+                                sqlite3_finalize(nodeStatement)
+                                return nil
+                            } else {
+                                break
                             }
                         }
                     }
 
                     sqlite3_finalize(edgeStatement)
+                } else if stepResult == SQLITE_INTERRUPT {
+                    sqlite3_finalize(nodeStatement)
+                    return nil
                 }
             }
 
@@ -529,7 +552,7 @@ class PredictionService {
         }
 
         // Use pre-computed proactive candidates if available and current
-        let candidates: [(String, Int, Int)]
+        let candidates: [(String, Int, Int)]?
 
         if trimmedWord.lowercased() == currentSearchWord {
             if !proactiveCandidates.isEmpty {
@@ -548,7 +571,11 @@ class PredictionService {
             candidates = queryBKTree(word: trimmedWord, maxDistance: 2)
         }
 
-        // Return nil if no candidates found
+        // Return nil if search was cancelled or no candidates found
+        guard let candidates = candidates else {
+            return nil
+        }
+
         if candidates.isEmpty {
             return nil
         }
