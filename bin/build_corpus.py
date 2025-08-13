@@ -4,10 +4,10 @@ Build filtered word corpus from word frequencies and legitimate words list.
 
 Loads word_frequencies.txt (ordered word list) and filters to only include
 words that appear in legitimate_words.txt, then outputs the filtered list
-to corpus/words.txt and creates Keyboard/words.db with populated tables
-including BK-tree for typo correction.
+to corpus/words.txt and creates Keyboard/words.db with populated tables.
 """
 
+import os
 import sqlite3
 import sys
 from typing import Dict, Set, List, Tuple, Optional
@@ -47,137 +47,68 @@ def load_hidden_words(filepath: str) -> Set[str]:
     return hidden
 
 
-def levenshtein_distance(s1: str, s2: str) -> int:
-    """Calculate Levenshtein edit distance between two strings."""
-    if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
-
-    if len(s2) == 0:
-        return len(s1)
-
-    previous_row = list(range(len(s2) + 1))
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
-
-    return previous_row[-1]
+def hash_string(s: str) -> int:
+    """Simple hash function for strings - consistent with Swift."""
+    hash_value = 0
+    for char in s:
+        hash_value = (hash_value * 31 + ord(char)) & 0x7FFFFFFFFFFFFFFF
+    return hash_value
 
 
-class BKTreeBuilder:
-    """Builds a BK-Tree from word list and stores it in SQLite."""
+def generate_deletes(word: str, max_edit_distance: int = 2, prefix_length: int = 7) -> Set[str]:
+    """Generate all possible deletes for a word up to max_edit_distance."""
+    deletes = set()
 
-    def __init__(self, conn: sqlite3.Connection):
-        self.conn = conn
-        self.node_id = 0
+    def generate_deletes_recursive(word: str, edit_distance: int):
+        deletes.add(word)
+        if edit_distance < max_edit_distance:
+            if len(word) > prefix_length:
+                word = word[:prefix_length]
+            for i in range(len(word)):
+                if len(word) > 1:  # Don't delete if it would make empty string
+                    delete = word[:i] + word[i+1:]
+                    if delete not in deletes:
+                        generate_deletes_recursive(delete, edit_distance + 1)
 
-    def create_bk_tables(self):
-        """Create BK-Tree tables in database."""
-        self.conn.execute('''
-            CREATE TABLE IF NOT EXISTS bk_nodes (
-                node_id INTEGER PRIMARY KEY,
-                word TEXT NOT NULL,
-                frequency_rank INTEGER NOT NULL,
-                hidden INTEGER NOT NULL DEFAULT 0
-            )
-        ''')
+    generate_deletes_recursive(word, 0)
+    return deletes
 
-        self.conn.execute('''
-            CREATE TABLE IF NOT EXISTS bk_edges (
-                parent_id INTEGER NOT NULL,
-                child_id INTEGER NOT NULL,
-                distance INTEGER NOT NULL,
-                FOREIGN KEY (parent_id) REFERENCES bk_nodes (node_id),
-                FOREIGN KEY (child_id) REFERENCES bk_nodes (node_id)
-            )
-        ''')
 
-        # Index for efficient tree traversal
-        self.conn.execute('CREATE INDEX IF NOT EXISTS idx_bk_edges_parent_dist ON bk_edges (parent_id, distance)')
+def populate_symspell_tables(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]]):
+    """Populate SymSpell tables with deletes pointing to main words table."""
+    print("Building SymSpell dictionary...")
 
-    def insert_into_tree(self, root_id: Optional[int], word: str, frequency_rank: int, is_hidden: int) -> int:
-        """Insert word into BK-Tree, returning the node ID."""
-        # Create new node
-        if root_id is None:
-            # Root node always has ID 1
-            node_id = 1
-            self.node_id = 1
-        else:
-            self.node_id += 1
-            node_id = self.node_id
+    deletes_data = []
 
-        self.conn.execute('INSERT INTO bk_nodes (node_id, word, frequency_rank, hidden) VALUES (?, ?, ?, ?)',
-                         (node_id, word, frequency_rank, is_hidden))
+    for i, (word, original_rank) in enumerate(filtered_words):
+        word_lower = word.lower()
+        frequency_rank = i + 1  # Rank based on position in sorted list
 
-        if root_id is None:
-            # This is the root
-            return node_id
+        # Generate deletes for this word
+        deletes = generate_deletes(word_lower, max_edit_distance=2, prefix_length=7)
+        for delete in deletes:
+            delete_hash = hash_string(delete)
+            deletes_data.append((delete_hash, word_lower, frequency_rank, word))
 
-        # Find the correct position in the tree
-        current_id = root_id
+        if i % 1000 == 0:
+            print(f"Processed {i}/{len(filtered_words)} words for SymSpell...")
 
-        while True:
-            # Get current node's word
-            cursor = self.conn.execute('SELECT word FROM bk_nodes WHERE node_id = ?', (current_id,))
-            current_word = cursor.fetchone()[0]
+    # Batch insert with duplicate handling
+    conn.executemany(
+        'INSERT OR IGNORE INTO symspell_deletes (delete_hash, word_lower, frequency_rank, word) VALUES (?, ?, ?, ?)',
+        deletes_data
+    )
 
-            # Calculate distance to current node
-            distance = levenshtein_distance(word, current_word)
+    conn.commit()
+    print(f"SymSpell dictionary built with {len(deletes_data)} deletes")
 
-            # Check if there's already a child at this distance
-            cursor = self.conn.execute(
-                'SELECT child_id FROM bk_edges WHERE parent_id = ? AND distance = ?',
-                (current_id, distance)
-            )
-            existing_child = cursor.fetchone()
-
-            if existing_child:
-                # Continue down this path
-                current_id = existing_child[0]
-            else:
-                # Insert edge to new node
-                self.conn.execute('INSERT INTO bk_edges (parent_id, child_id, distance) VALUES (?, ?, ?)',
-                                (current_id, node_id, distance))
-                break
-
-        return node_id
-
-    def build_tree(self, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
-        """Build the complete BK-Tree from filtered words."""
-        print("Building BK-Tree...")
-
-        # Clear existing BK-Tree tables
-        self.conn.execute('DROP TABLE IF EXISTS bk_edges')
-        self.conn.execute('DROP TABLE IF EXISTS bk_nodes')
-        self.create_bk_tables()
-
-        root_id = None
-
-        for i, (word, rank) in enumerate(filtered_words):
-            frequency_rank = i + 1  # Rank based on position in sorted list
-            is_hidden = 1 if word.lower() in hidden_words else 0
-
-            if i % 5000 == 0:
-                print(f"Processed {i}/{len(filtered_words)} words...")
-                self.conn.commit()  # Periodic commit
-
-            if root_id is None:
-                root_id = self.insert_into_tree(None, word, frequency_rank, is_hidden)
-            else:
-                self.insert_into_tree(root_id, word, frequency_rank, is_hidden)
-
-        self.conn.commit()
-        print(f"BK-Tree built successfully with {len(filtered_words)} nodes")
 
 
 def create_database_tables(conn: sqlite3.Connection):
-    """Create the words and words_by_suffix tables."""
+    """Create all database tables and indexes."""
+    # Main words table
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS words (
+        CREATE TABLE words (
             word_lower TEXT NOT NULL,
             word_lower_reversed TEXT NOT NULL,
             frequency_rank INTEGER NOT NULL,
@@ -187,8 +118,9 @@ def create_database_tables(conn: sqlite3.Connection):
         ) WITHOUT ROWID
     ''')
 
+    # Suffix lookup table
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS words_by_suffix (
+        CREATE TABLE words_by_suffix (
             word_lower_reversed TEXT NOT NULL,
             frequency_rank INTEGER NOT NULL,
             word TEXT NOT NULL,
@@ -198,17 +130,26 @@ def create_database_tables(conn: sqlite3.Connection):
         ) WITHOUT ROWID
     ''')
 
+    # SymSpell table for typo correction with covering index data
+    conn.execute('''
+        CREATE TABLE symspell_deletes (
+            delete_hash INTEGER NOT NULL,
+            word_lower TEXT NOT NULL,
+            frequency_rank INTEGER NOT NULL,
+            word TEXT NOT NULL,
+            PRIMARY KEY (delete_hash, word_lower)
+        ) WITHOUT ROWID
+    ''')
+
+    # Covering index for eliminating JOIN - everything needed is in the index
+    conn.execute('CREATE INDEX idx_symspell_covering ON symspell_deletes (delete_hash, frequency_rank, word)')
+
     conn.commit()
 
 
 def populate_database(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
     """Populate the database tables with filtered words."""
     print("Populating database tables...")
-
-    # Clear existing data (SQLite doesn't support TRUNCATE, so drop and recreate)
-    conn.execute('DROP TABLE IF EXISTS words')
-    conn.execute('DROP TABLE IF EXISTS words_by_suffix')
-    create_database_tables(conn)
 
     words_data = []
     words_by_suffix_data = []
@@ -271,21 +212,23 @@ def build_filtered_corpus():
 
     print(f"Successfully wrote {len(filtered_words)} words to corpus/words.txt")
 
-    # Create and populate database
+    # Remove existing database and create fresh one
+    db_path = 'Keyboard/words.db'
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        print(f"Removed existing database: {db_path}")
+
     print("Creating database at Keyboard/words.db...")
-    conn = sqlite3.connect('Keyboard/words.db')
+    conn = sqlite3.connect(db_path)
     try:
         create_database_tables(conn)
         populate_database(conn, filtered_words, hidden_words)
-
-        # Build BK-tree for typo correction
-        bk_builder = BKTreeBuilder(conn)
-        bk_builder.build_tree(filtered_words, hidden_words)
+        populate_symspell_tables(conn, filtered_words)
 
     finally:
         conn.close()
 
-    print("Database created and populated successfully with BK-tree")
+    print("Database created and populated successfully")
 
 
 def main():

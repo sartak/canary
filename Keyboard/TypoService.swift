@@ -1,12 +1,12 @@
 import Foundation
 import SQLite3
+import simd
 
 class TypoService {
     private let db: OpaquePointer
 
-    // Cached prepared statements
-    private let nodeStatement: OpaquePointer
-    private let edgeStatement: OpaquePointer
+    // Cache for batch queries by placeholder count
+    private var batchQueryCache: [Int: OpaquePointer] = [:]
 
     init?(dbPath: String) {
         var dbTemp: OpaquePointer?
@@ -22,33 +22,14 @@ class TypoService {
             return nil
         }
         self.db = db
-
-        // Prepare statements - if any fail, cleanup and return nil
-        var nodeStmt: OpaquePointer?
-        var edgeStmt: OpaquePointer?
-
-        let nodeQuery = "SELECT word, frequency_rank, hidden FROM bk_nodes WHERE node_id = ?"
-        let edgeQuery = "SELECT child_id FROM bk_edges WHERE parent_id = ? AND distance >= ? AND distance <= ?"
-
-        guard sqlite3_prepare_v2(db, nodeQuery, -1, &nodeStmt, nil) == SQLITE_OK,
-              sqlite3_prepare_v2(db, edgeQuery, -1, &edgeStmt, nil) == SQLITE_OK,
-              let nodeStatement = nodeStmt,
-              let edgeStatement = edgeStmt else {
-
-            // Cleanup on failure
-            sqlite3_finalize(nodeStmt)
-            sqlite3_finalize(edgeStmt)
-            sqlite3_close(db)
-            return nil
-        }
-
-        self.nodeStatement = nodeStatement
-        self.edgeStatement = edgeStatement
     }
 
     deinit {
-        sqlite3_finalize(nodeStatement)
-        sqlite3_finalize(edgeStatement)
+        // Clean up cached batch query statements
+        for (_, statement) in batchQueryCache {
+            sqlite3_finalize(statement)
+        }
+
         sqlite3_close(db)
     }
 
@@ -57,97 +38,289 @@ class TypoService {
     }
 
     func suggestTypoCorrections(for word: String, maxDistance: Int, task: DispatchWorkItem? = nil) -> [(String, Int, Int)]? {
-        return queryBKTree(word: word, maxDistance: maxDistance, task: task)
-    }
+        // Progressive search: try distance=1 first, only do distance=2 if no results
 
-    private func queryBKTree(word: String, maxDistance: Int, task: DispatchWorkItem?) -> [(String, Int, Int)]? {
-        var candidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
-        var queue: [Int] = [1] // Just node_ids for simpler queue
-
-        while !queue.isEmpty {
-            // Check if search was cancelled
-            if task?.isCancelled == true {
-                return nil
+        // First try distance=1 (most common typos)
+        if let results1 = querySymSpell(word: word, maxDistance: 1, task: task) {
+            if !results1.isEmpty {
+                return results1 // Found good corrections, done!
             }
-
-            let nodeId = queue.removeFirst()
-
-            // Get word for current node using cached statement
-            sqlite3_bind_int(nodeStatement, 1, Int32(nodeId))
-            let stepResult = sqlite3_step(nodeStatement)
-
-            if stepResult == SQLITE_ROW {
-                let nodeWordPtr = sqlite3_column_text(nodeStatement, 0)
-                let nodeWord = String(cString: nodeWordPtr!)
-                let frequencyRank = Int(sqlite3_column_int(nodeStatement, 1))
-                let isHidden = Int(sqlite3_column_int(nodeStatement, 2))
-
-                let distance = levenshteinDistance(word, nodeWord)
-                if distance <= maxDistance && isHidden == 0 {
-                    candidates.append((nodeWord, distance, frequencyRank))
-                }
-
-                // Add children to queue if they could contain valid candidates
-                let minChildDistance = max(0, distance - maxDistance)
-                let maxChildDistance = distance + maxDistance
-
-                sqlite3_bind_int(edgeStatement, 1, Int32(nodeId))
-                sqlite3_bind_int(edgeStatement, 2, Int32(minChildDistance))
-                sqlite3_bind_int(edgeStatement, 3, Int32(maxChildDistance))
-
-                while true {
-                    let edgeStepResult = sqlite3_step(edgeStatement)
-                    if edgeStepResult == SQLITE_ROW {
-                        let childId = Int(sqlite3_column_int(edgeStatement, 0))
-                        queue.append(childId)
-                    } else if edgeStepResult == SQLITE_INTERRUPT {
-                        sqlite3_reset(nodeStatement)
-                        sqlite3_clear_bindings(nodeStatement)
-                        sqlite3_reset(edgeStatement)
-                        sqlite3_clear_bindings(edgeStatement)
-                        return nil
-                    } else {
-                        break
-                    }
-                }
-
-                sqlite3_reset(edgeStatement)
-                sqlite3_clear_bindings(edgeStatement)
-            } else if stepResult == SQLITE_INTERRUPT {
-                sqlite3_reset(nodeStatement)
-                sqlite3_clear_bindings(nodeStatement)
-                return nil
-            }
-
-            sqlite3_reset(nodeStatement)
-            sqlite3_clear_bindings(nodeStatement)
+        } else {
+            return nil // Search was cancelled
         }
 
+        // Only if no distance=1 corrections and maxDistance allows, try distance=2
+        if maxDistance >= 2 {
+            return querySymSpell(word: word, maxDistance: 2, task: task)
+        }
+
+        return [] // No results found
+    }
+
+    private func querySymSpell(word: String, maxDistance: Int, task: DispatchWorkItem?) -> [(String, Int, Int)]? {
+        var candidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
+        var processedWords: Set<String> = []
+
+        // Check if search was cancelled
+        if task?.isCancelled == true {
+            return nil
+        }
+
+        // Generate deletes for the input word
+        let deletes = generateDeletes(word: word, maxEditDistance: maxDistance)
+        let deleteHashes = deletes.map { hashString($0) }
+
+        // Get or create cached batch query statement
+        let hashCount = deleteHashes.count
+        let batchStatement: OpaquePointer
+
+        if let cachedStatement = batchQueryCache[hashCount] {
+            batchStatement = cachedStatement
+        } else {
+            // Create new batch query with IN clause
+            let placeholders = Array(repeating: "?", count: hashCount).joined(separator: ",")
+            let batchQuery = """
+                SELECT DISTINCT word, frequency_rank
+                FROM symspell_deletes
+                WHERE delete_hash IN (\(placeholders))
+                ORDER BY frequency_rank ASC
+            """
+
+            var newStatement: OpaquePointer?
+            guard sqlite3_prepare_v2(db, batchQuery, -1, &newStatement, nil) == SQLITE_OK,
+                  let statement = newStatement else {
+                return candidates
+            }
+
+            batchQueryCache[hashCount] = statement
+            batchStatement = statement
+        }
+
+        // Bind all delete hashes
+        for (index, deleteHash) in deleteHashes.enumerated() {
+            sqlite3_bind_int64(batchStatement, Int32(index + 1), deleteHash)
+        }
+
+        // Execute batch query
+        while true {
+            let stepResult = sqlite3_step(batchStatement)
+            if stepResult == SQLITE_ROW {
+                let candidateWordPtr = sqlite3_column_text(batchStatement, 0)
+                let candidateWord = String(cString: candidateWordPtr!)
+                let frequencyRank = Int(sqlite3_column_int(batchStatement, 1))
+
+                // Avoid processing the same word multiple times
+                if !processedWords.contains(candidateWord) {
+                    processedWords.insert(candidateWord)
+
+                    let distance = levenshteinDistance(word, candidateWord, maxDistance: maxDistance)
+                    if distance <= maxDistance {
+                        candidates.append((candidateWord, distance, frequencyRank))
+
+                        // Early exit: found distance <= 1 result, which is likely the best
+                        if distance <= 1 {
+                            sqlite3_reset(batchStatement)
+                            sqlite3_clear_bindings(batchStatement)
+                            return candidates
+                        }
+                    }
+                }
+            } else if stepResult == SQLITE_INTERRUPT {
+                sqlite3_reset(batchStatement)
+                sqlite3_clear_bindings(batchStatement)
+                return nil
+            } else {
+                break
+            }
+        }
+
+        sqlite3_reset(batchStatement)
+        sqlite3_clear_bindings(batchStatement)
         return candidates
     }
 
-    private func levenshteinDistance(_ s1: String, _ s2: String) -> Int {
-        let a = Array(s1)
-        let b = Array(s2)
+    private func generateDeletes(word: String, maxEditDistance: Int, prefixLength: Int = 7) -> Set<String> {
+        var deletes: Set<String> = []
+
+        func generateDeletesRecursive(chars: [Character], editDistance: Int) {
+            let word = String(chars)
+            deletes.insert(word)
+
+            if editDistance < maxEditDistance {
+                // Apply prefix length limit like Python version
+                let charsToProcess = chars.count > prefixLength ? Array(chars.prefix(prefixLength)) : chars
+
+                if charsToProcess.count > 1 {
+                    for i in 0..<charsToProcess.count {
+                        // Create new array with character at index i removed
+                        var deletedChars = charsToProcess
+                        deletedChars.remove(at: i)
+
+                        let deletedWord = String(deletedChars)
+                        if !deletes.contains(deletedWord) {
+                            generateDeletesRecursive(chars: deletedChars, editDistance: editDistance + 1)
+                        }
+                    }
+                }
+            }
+        }
+
+        generateDeletesRecursive(chars: Array(word), editDistance: 0)
+        return deletes
+    }
+
+    private func hashString(_ string: String) -> Int64 {
+        // Simple hash function consistent with Python build script
+        var hashValue: Int64 = 0
+        for char in string.unicodeScalars {
+            hashValue = (hashValue &* 31 &+ Int64(char.value)) & 0x7FFFFFFFFFFFFFFF
+        }
+        return hashValue
+    }
+
+
+    private func levenshteinDistance(_ s1: String, _ s2: String, maxDistance: Int = 2) -> Int {
+        // Convert to UTF-8 bytes for SIMD operations
+        let a = Array(s1.utf8)
+        let b = Array(s2.utf8)
 
         if a.isEmpty { return b.count }
         if b.isEmpty { return a.count }
 
-        var previousRow = Array(0...b.count)
+        // Early termination: if length difference > maxDistance, return sentinel value
+        let lengthDiff = abs(a.count - b.count)
+        if lengthDiff > maxDistance { return 999 }
 
-        for (i, aChar) in a.enumerated() {
-            var currentRow = [i + 1]
+        // SIMD optimization: Skip common prefix and suffix
+        var startA = 0, startB = 0
+        var endA = a.count, endB = b.count
 
-            for (j, bChar) in b.enumerated() {
-                let insertions = previousRow[j + 1] + 1
-                let deletions = currentRow[j] + 1
-                let substitutions = previousRow[j] + (aChar == bChar ? 0 : 1)
-                currentRow.append(min(insertions, deletions, substitutions))
+        // Skip common prefix using SIMD
+        while startA < endA && startB < endB {
+            let remainingA = endA - startA
+            let remainingB = endB - startB
+            let minRemaining = min(remainingA, remainingB)
+
+            // Process up to 16 bytes at a time with SIMD
+            if minRemaining >= 16 {
+                // Load 16 bytes from each string
+                let vecA = simd_uchar16(
+                    a[startA], a[startA+1], a[startA+2], a[startA+3],
+                    a[startA+4], a[startA+5], a[startA+6], a[startA+7],
+                    a[startA+8], a[startA+9], a[startA+10], a[startA+11],
+                    a[startA+12], a[startA+13], a[startA+14], a[startA+15]
+                )
+                let vecB = simd_uchar16(
+                    b[startB], b[startB+1], b[startB+2], b[startB+3],
+                    b[startB+4], b[startB+5], b[startB+6], b[startB+7],
+                    b[startB+8], b[startB+9], b[startB+10], b[startB+11],
+                    b[startB+12], b[startB+13], b[startB+14], b[startB+15]
+                )
+
+                // Check if vectors are equal by comparing them directly
+                let allEqual = (vecA == vecB)
+                if allEqual {
+                    startA += 16
+                    startB += 16
+                    continue
+                } else {
+                    // Find first mismatch within the 16 bytes using scalar comparison
+                    for i in 0..<16 {
+                        if vecA[i] != vecB[i] { break }
+                        startA += 1
+                        startB += 1
+                    }
+                    break
+                }
+            } else {
+                // Handle remaining bytes one by one
+                if a[startA] == b[startB] {
+                    startA += 1
+                    startB += 1
+                } else {
+                    break
+                }
             }
-
-            previousRow = currentRow
         }
 
-        return previousRow.last!
+        // Skip common suffix using SIMD (process backwards)
+        while startA < endA && startB < endB {
+            let remainingA = endA - startA
+            let remainingB = endB - startB
+            let minRemaining = min(remainingA, remainingB)
+
+            if minRemaining >= 16 {
+                // Load 16 bytes from end of each string
+                let vecA = simd_uchar16(
+                    a[endA-16], a[endA-15], a[endA-14], a[endA-13],
+                    a[endA-12], a[endA-11], a[endA-10], a[endA-9],
+                    a[endA-8], a[endA-7], a[endA-6], a[endA-5],
+                    a[endA-4], a[endA-3], a[endA-2], a[endA-1]
+                )
+                let vecB = simd_uchar16(
+                    b[endB-16], b[endB-15], b[endB-14], b[endB-13],
+                    b[endB-12], b[endB-11], b[endB-10], b[endB-9],
+                    b[endB-8], b[endB-7], b[endB-6], b[endB-5],
+                    b[endB-4], b[endB-3], b[endB-2], b[endB-1]
+                )
+
+                // Check if vectors are equal by comparing them directly
+                if (vecA == vecB) {
+                    endA -= 16
+                    endB -= 16
+                    continue
+                } else {
+                    // Find last mismatch within the 16 bytes - use scalar fallback
+                    for i in (0..<16).reversed() {
+                        if vecA[15-i] != vecB[15-i] { break }
+                        endA -= 1
+                        endB -= 1
+                    }
+                    break
+                }
+            } else {
+                // Handle remaining bytes one by one
+                if a[endA-1] == b[endB-1] {
+                    endA -= 1
+                    endB -= 1
+                } else {
+                    break
+                }
+            }
+        }
+
+        // If one string is now empty, return the length of the other
+        let trimmedLenA = endA - startA
+        let trimmedLenB = endB - startB
+        if trimmedLenA == 0 { return trimmedLenB }
+        if trimmedLenB == 0 { return trimmedLenA }
+
+        // Now compute Levenshtein on the trimmed strings with SIMD-optimized min operations
+        var distances = Array(0...trimmedLenB)
+
+        for i in 0..<trimmedLenA {
+            var newDistances = [i + 1]
+            var minInRow = i + 1
+
+            for j in 0..<trimmedLenB {
+                let cost = (a[startA + i] == b[startB + j]) ? 0 : 1
+
+                // SIMD-optimized min of 3 values
+                let costs = simd_int4(Int32(distances[j + 1] + 1), Int32(newDistances[j] + 1), Int32(distances[j] + cost), Int32.max)
+                let minDistance = Int(simd_reduce_min(costs))
+
+                newDistances.append(minDistance)
+                minInRow = min(minInRow, minDistance)
+            }
+
+            // Early termination: if minimum in this row > maxDistance, return sentinel value
+            if minInRow > maxDistance {
+                return 999
+            }
+
+            distances = newDistances
+        }
+
+        return distances.last!
     }
 }

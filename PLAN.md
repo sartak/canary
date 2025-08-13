@@ -110,6 +110,9 @@
 - [ ] Enhance predictions with learned vocabulary
 - [ ] Implement memory pressure response (release caches, unload unused data)
 
+### Smarter Autocorrect
+- [ ] Add post-processing to pick closest match based on keyboard distance
+
 ## Milestone 10: Text Expansion
 **Goal**: Add custom shortcuts that expand to longer phrases
 
