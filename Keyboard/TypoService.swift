@@ -2,25 +2,54 @@ import Foundation
 import SQLite3
 
 class TypoService {
-    private var db: OpaquePointer?
+    private let db: OpaquePointer
+
+    // Cached prepared statements
+    private let nodeStatement: OpaquePointer
+    private let edgeStatement: OpaquePointer
 
     init?(dbPath: String) {
-        if sqlite3_open(dbPath, &db) != SQLITE_OK {
-            print("TypoService: Error opening database: \(String(cString: sqlite3_errmsg(db)))")
-            close()
+        var dbTemp: OpaquePointer?
+        if sqlite3_open(dbPath, &dbTemp) != SQLITE_OK {
+            print("TypoService: Error opening database: \(String(cString: sqlite3_errmsg(dbTemp)))")
+            if dbTemp != nil {
+                sqlite3_close(dbTemp)
+            }
             return nil
         }
+
+        guard let db = dbTemp else {
+            return nil
+        }
+        self.db = db
+
+        // Prepare statements - if any fail, cleanup and return nil
+        var nodeStmt: OpaquePointer?
+        var edgeStmt: OpaquePointer?
+
+        let nodeQuery = "SELECT word, frequency_rank, hidden FROM bk_nodes WHERE node_id = ?"
+        let edgeQuery = "SELECT child_id FROM bk_edges WHERE parent_id = ? AND distance >= ? AND distance <= ?"
+
+        guard sqlite3_prepare_v2(db, nodeQuery, -1, &nodeStmt, nil) == SQLITE_OK,
+              sqlite3_prepare_v2(db, edgeQuery, -1, &edgeStmt, nil) == SQLITE_OK,
+              let nodeStatement = nodeStmt,
+              let edgeStatement = edgeStmt else {
+
+            // Cleanup on failure
+            sqlite3_finalize(nodeStmt)
+            sqlite3_finalize(edgeStmt)
+            sqlite3_close(db)
+            return nil
+        }
+
+        self.nodeStatement = nodeStatement
+        self.edgeStatement = edgeStatement
     }
 
     deinit {
-        close()
-    }
-
-    private func close() {
-        if db != nil {
-            sqlite3_close(db)
-            db = nil
-        }
+        sqlite3_finalize(nodeStatement)
+        sqlite3_finalize(edgeStatement)
+        sqlite3_close(db)
     }
 
     func suggestTypoCorrections(for word: String, maxDistance: Int, task: DispatchWorkItem? = nil) -> [(String, Int, Int)]? {
@@ -28,7 +57,6 @@ class TypoService {
     }
 
     private func queryBKTree(word: String, maxDistance: Int, task: DispatchWorkItem?) -> [(String, Int, Int)]? {
-        guard let db = db else { return [] }
         var candidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
         var queue: [Int] = [1] // Just node_ids for simpler queue
 
@@ -40,60 +68,55 @@ class TypoService {
 
             let nodeId = queue.removeFirst()
 
-            // Get word for current node
-            var nodeStatement: OpaquePointer?
-            let nodeQuery = "SELECT word, frequency_rank, hidden FROM bk_nodes WHERE node_id = ?"
+            // Get word for current node using cached statement
+            sqlite3_bind_int(nodeStatement, 1, Int32(nodeId))
+            let stepResult = sqlite3_step(nodeStatement)
 
-            if sqlite3_prepare_v2(db, nodeQuery, -1, &nodeStatement, nil) == SQLITE_OK {
-                sqlite3_bind_int(nodeStatement, 1, Int32(nodeId))
+            if stepResult == SQLITE_ROW {
+                let nodeWordPtr = sqlite3_column_text(nodeStatement, 0)
+                let nodeWord = String(cString: nodeWordPtr!)
+                let frequencyRank = Int(sqlite3_column_int(nodeStatement, 1))
+                let isHidden = Int(sqlite3_column_int(nodeStatement, 2))
 
-                let stepResult = sqlite3_step(nodeStatement)
-                if stepResult == SQLITE_ROW {
-                    let nodeWordPtr = sqlite3_column_text(nodeStatement, 0)
-                    let nodeWord = String(cString: nodeWordPtr!)
-                    let frequencyRank = Int(sqlite3_column_int(nodeStatement, 1))
-                    let isHidden = Int(sqlite3_column_int(nodeStatement, 2))
-
-                    let distance = levenshteinDistance(word, nodeWord)
-                    if distance <= maxDistance && isHidden == 0 {
-                        candidates.append((nodeWord, distance, frequencyRank))
-                    }
-
-                    // Add children to queue if they could contain valid candidates
-                    let minChildDistance = max(0, distance - maxDistance)
-                    let maxChildDistance = distance + maxDistance
-
-                    var edgeStatement: OpaquePointer?
-                    let edgeQuery = "SELECT child_id FROM bk_edges WHERE parent_id = ? AND distance >= ? AND distance <= ?"
-
-                    if sqlite3_prepare_v2(db, edgeQuery, -1, &edgeStatement, nil) == SQLITE_OK {
-                        sqlite3_bind_int(edgeStatement, 1, Int32(nodeId))
-                        sqlite3_bind_int(edgeStatement, 2, Int32(minChildDistance))
-                        sqlite3_bind_int(edgeStatement, 3, Int32(maxChildDistance))
-
-                        while true {
-                            let edgeStepResult = sqlite3_step(edgeStatement)
-                            if edgeStepResult == SQLITE_ROW {
-                                let childId = Int(sqlite3_column_int(edgeStatement, 0))
-                                queue.append(childId)
-                            } else if edgeStepResult == SQLITE_INTERRUPT {
-                                sqlite3_finalize(edgeStatement)
-                                sqlite3_finalize(nodeStatement)
-                                return nil
-                            } else {
-                                break
-                            }
-                        }
-                    }
-
-                    sqlite3_finalize(edgeStatement)
-                } else if stepResult == SQLITE_INTERRUPT {
-                    sqlite3_finalize(nodeStatement)
-                    return nil
+                let distance = levenshteinDistance(word, nodeWord)
+                if distance <= maxDistance && isHidden == 0 {
+                    candidates.append((nodeWord, distance, frequencyRank))
                 }
+
+                // Add children to queue if they could contain valid candidates
+                let minChildDistance = max(0, distance - maxDistance)
+                let maxChildDistance = distance + maxDistance
+
+                sqlite3_bind_int(edgeStatement, 1, Int32(nodeId))
+                sqlite3_bind_int(edgeStatement, 2, Int32(minChildDistance))
+                sqlite3_bind_int(edgeStatement, 3, Int32(maxChildDistance))
+
+                while true {
+                    let edgeStepResult = sqlite3_step(edgeStatement)
+                    if edgeStepResult == SQLITE_ROW {
+                        let childId = Int(sqlite3_column_int(edgeStatement, 0))
+                        queue.append(childId)
+                    } else if edgeStepResult == SQLITE_INTERRUPT {
+                        sqlite3_reset(nodeStatement)
+                        sqlite3_clear_bindings(nodeStatement)
+                        sqlite3_reset(edgeStatement)
+                        sqlite3_clear_bindings(edgeStatement)
+                        return nil
+                    } else {
+                        break
+                    }
+                }
+
+                sqlite3_reset(edgeStatement)
+                sqlite3_clear_bindings(edgeStatement)
+            } else if stepResult == SQLITE_INTERRUPT {
+                sqlite3_reset(nodeStatement)
+                sqlite3_clear_bindings(nodeStatement)
+                return nil
             }
 
-            sqlite3_finalize(nodeStatement)
+            sqlite3_reset(nodeStatement)
+            sqlite3_clear_bindings(nodeStatement)
         }
 
         return candidates
