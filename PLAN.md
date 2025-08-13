@@ -83,7 +83,9 @@
 - [x] Create suggestion bar above keyboard
 - [x] Implement suggestion selection and insertion
 - [x] Add enhanced auto-correction with prediction integration
-- [ ] Access UILexicon for user's personal dictionary and learned words
+- [ ] Display autocorrect term in suggestions bar
+- [ ] Opting out of an autocorrect by tapping on the suggestions bar preview
+- [ ] Improve autocorrect of "foo's" to autocorrect "foo" then append "'s"
 
 ### Context-Aware Tuning
 - [ ] Implement smart backspace (context-aware deletion)
@@ -94,8 +96,7 @@
 **Goal**: Basic gesture recognition for swipe typing
 
 ### Gesture Recognition
-- [ ] Implement touch tracking across keyboard
-- [ ] Create gesture path recording system
+- [ ] Create gesture-on-keyboard path recording system
 - [ ] Add visual feedback during swipe gestures
 - [ ] Create basic path-to-word prediction algorithm
 - [ ] Track accuracy based on whether word was corrected, for further fine-tuning
@@ -104,14 +105,18 @@
 **Goal**: Make keyboard learn user patterns and vocabulary
 
 ### Data Storage
+- [ ] Access UILexicon for user's personal dictionary and learned words
 - [ ] Implement local storage system (Core Data)
-- [ ] Create user dictionary for new words
+- [ ] Use user dictionary for typeahead and typo correction
+- [ ] Add dictionary management to the main app
+- [ ] Learn a word if it's retyped immediately after an autocorrect of it
 - [ ] Add frequency tracking for typed words
 - [ ] Enhance predictions with learned vocabulary
 - [ ] Implement memory pressure response (release caches, unload unused data)
 
 ### Smarter Autocorrect
 - [ ] Add post-processing to pick closest match based on keyboard distance
+- [ ] Fix smart capitalization: "WRNg" autocorrects to "WROng" but should be "WRoNg"
 
 ## Milestone 10: Text Expansion
 **Goal**: Add custom shortcuts that expand to longer phrases
