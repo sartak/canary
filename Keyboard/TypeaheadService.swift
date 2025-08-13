@@ -43,7 +43,7 @@ class TypeaheadService {
             ORDER BY frequency_rank LIMIT \(maxSuggestions)
         """
 
-        let prefixOnlyQuery = "SELECT word FROM words WHERE word_lower LIKE ? AND hidden = 0 ORDER BY frequency_rank LIMIT \(maxSuggestions)"
+        let prefixOnlyQuery = "SELECT word FROM prefixes WHERE prefix_lower = ? AND hidden = 0 ORDER BY frequency_rank LIMIT \(maxSuggestions)"
 
         let suffixOnlyQuery = "SELECT word FROM words_by_suffix WHERE word_lower_reversed LIKE ? AND hidden = 0 ORDER BY frequency_rank LIMIT \(maxSuggestions)"
 
@@ -109,7 +109,7 @@ class TypeaheadService {
         } else if !prefix.isEmpty {
             // Prefix only
             statement = prefixOnlyStatement
-            sqlite3_bind_text(statement, 1, "\(prefix)%", -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            sqlite3_bind_text(statement, 1, prefix.lowercased(), -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
         } else if !suffix.isEmpty {
             // Suffix only
             statement = suffixOnlyStatement

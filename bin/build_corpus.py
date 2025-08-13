@@ -139,10 +139,46 @@ def create_database_tables(conn: sqlite3.Connection):
         ) WITHOUT ROWID
     ''')
 
+    # Prefix lookup table for fast typeahead completion
+    conn.execute('''
+        CREATE TABLE prefixes (
+            prefix_lower TEXT NOT NULL,
+            word TEXT NOT NULL,
+            frequency_rank INTEGER NOT NULL,
+            hidden INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (prefix_lower, frequency_rank)
+        ) WITHOUT ROWID
+    ''')
+
     # Covering index for eliminating JOIN - everything needed is in the index
     conn.execute('CREATE INDEX idx_symspell_covering ON symspell_deletes (delete_hash, frequency_rank, word)')
 
     conn.commit()
+
+
+def populate_prefixes_table(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
+    """Populate the prefixes table with all possible prefixes for each word."""
+    print("Building prefixes table...")
+
+    prefixes_data = []
+
+    for rank, (word, original_rank) in enumerate(filtered_words, 1):
+        word_lower = word.lower()
+        is_hidden = 1 if word_lower in hidden_words else 0
+
+        # Generate all prefixes for this word (1 to full length)
+        for i in range(1, len(word_lower) + 1):
+            prefix = word_lower[:i]
+            prefixes_data.append((prefix, word, rank, is_hidden))
+
+    # Batch insert for performance
+    conn.executemany(
+        'INSERT INTO prefixes (prefix_lower, word, frequency_rank, hidden) VALUES (?, ?, ?, ?)',
+        prefixes_data
+    )
+
+    conn.commit()
+    print(f"Populated prefixes table with {len(prefixes_data)} prefix entries")
 
 
 def populate_database(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
@@ -221,6 +257,7 @@ def build_filtered_corpus():
     try:
         create_database_tables(conn)
         populate_database(conn, filtered_words, hidden_words)
+        populate_prefixes_table(conn, filtered_words, hidden_words)
         populate_symspell_tables(conn, filtered_words)
 
     finally:
