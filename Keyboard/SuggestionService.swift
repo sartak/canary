@@ -313,6 +313,8 @@ class SuggestionService {
     func correctTypo(word: String) -> String? {
         let trimmedWord = word.trimmingCharacters(in: .whitespaces)
 
+        guard !trimmedWord.isEmpty else { return nil }
+
         // Skip correction for strings containing invalid characters
         // Only allow words composed entirely of valid word characters
         if !trimmedWord.indices.allSatisfy({ index in

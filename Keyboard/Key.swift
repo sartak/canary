@@ -78,13 +78,6 @@ struct Key {
         return text.count == 1 && autocorrectTriggers.contains(text.first!)
     }
 
-    static func autocorrectWord(_ word: String, using suggestionService: SuggestionService) -> String {
-        let trimmedWord = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedWord.isEmpty else { return word }
-
-        return suggestionService.correctTypo(word: trimmedWord) ?? word
-    }
-
     static func getCurrentWord(from textDocumentProxy: UITextDocumentProxy) -> (word: String, range: NSRange)? {
         guard let beforeInput = textDocumentProxy.documentContextBeforeInput else {
             return nil
@@ -131,7 +124,7 @@ struct Key {
             return
         }
 
-        let correctedWord = autocorrectWord(wordInfo.word, using: suggestionService)
+        let correctedWord = suggestionService.correctTypo(word: wordInfo.word) ?? wordInfo.word
 
         // Only show visual feedback and apply correction if the word actually changed
         if correctedWord != wordInfo.word {
