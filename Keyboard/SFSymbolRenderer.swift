@@ -13,9 +13,10 @@ enum SFSymbolRenderer {
         shiftState: ShiftState,
         fontSize: CGFloat,
         theme: ColorTheme,
-        pressed: Bool = false
+        pressed: Bool = false,
+        autocorrectEnabled: Bool = true
     ) -> UIView? {
-        guard let symbolName = key.sfSymbolName(shiftState: shiftState, pressed: pressed) else {
+        guard let symbolName = key.sfSymbolName(shiftState: shiftState, pressed: pressed, autocorrectEnabled: autocorrectEnabled) else {
             return nil
         }
 
@@ -50,9 +51,10 @@ enum SFSymbolRenderer {
         shiftState: ShiftState,
         fontSize: CGFloat,
         theme: ColorTheme,
-        pressed: Bool = false
+        pressed: Bool = false,
+        autocorrectEnabled: Bool = true
     ) -> UIView {
-        if let symbolView = render(for: key, shiftState: shiftState, fontSize: fontSize, theme: theme, pressed: pressed) {
+        if let symbolView = render(for: key, shiftState: shiftState, fontSize: fontSize, theme: theme, pressed: pressed, autocorrectEnabled: autocorrectEnabled) {
             return symbolView
         } else {
             return createTextLabel(for: key, shiftState: shiftState, fontSize: fontSize, theme: theme)

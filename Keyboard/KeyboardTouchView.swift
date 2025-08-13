@@ -17,6 +17,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
     }
     var currentShiftState: ShiftState = .unshifted
     var deviceLayout: DeviceLayout!
+    var autocorrectEnabled: Bool = true
     var keysWithPopouts: Set<Int> = []
     var onKeyTouchDown: ((KeyData) -> Void)? {
         didSet {
@@ -230,7 +231,8 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
                     shiftState: currentShiftState,
                     fontSize: fontSize,
                     theme: theme,
-                    pressed: isPressed
+                    pressed: isPressed,
+                    autocorrectEnabled: autocorrectEnabled
                 ) as? UIImageView {
                     // Draw SF Symbol
                     let symbolImage = symbolView.image!

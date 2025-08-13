@@ -33,6 +33,10 @@ enum FeedbackPattern: Equatable {
     case none
 }
 
+enum Configuration: Equatable {
+    case toggleAutocorrect
+}
+
 enum KeyType: Equatable {
     case simple(String)
     case backspace
@@ -42,6 +46,7 @@ enum KeyType: Equatable {
     case layerSwitch(Layer)
     case layoutSwitch(KeyboardLayout)
     case globe
+    case configuration(Configuration)
     case empty
 }
 
@@ -135,7 +140,7 @@ struct Key {
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, autocorrectVisualHandler: @escaping (String, String, CGPoint) -> Void = { _, _, _ in }) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, autocorrectVisualHandler: @escaping (String, String, CGPoint) -> Void = { _, _, _ in }) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
@@ -177,6 +182,8 @@ struct Key {
             layoutSwitchHandler(layout)
         case .globe:
             globeHandler()
+        case .configuration(let config):
+            configurationHandler(config)
         case .empty:
             // Do nothing for empty keys
             break
@@ -186,14 +193,14 @@ struct Key {
         switch keyType {
         case .shift:
             break
-        case .simple, .backspace, .enter, .space, .layerSwitch, .layoutSwitch, .globe:
+        case .simple, .backspace, .enter, .space, .layerSwitch, .layoutSwitch, .globe, .configuration:
             autoUnshiftHandler()
         case .empty:
             break
         }
     }
 
-    func sfSymbolName(shiftState: ShiftState = .unshifted, pressed: Bool = false) -> String? {
+    func sfSymbolName(shiftState: ShiftState = .unshifted, pressed: Bool = false, autocorrectEnabled: Bool = true) -> String? {
         switch keyType {
         case .globe:
             return "globe"
@@ -208,6 +215,11 @@ struct Key {
             }
         case .backspace:
             return pressed ? "delete.backward.fill" : "delete.backward"
+        case .configuration(let config):
+            switch config {
+            case .toggleAutocorrect:
+                return autocorrectEnabled ? "checkmark.circle" : "checkmark.circle.badge.xmark"
+            }
         default:
             return nil
         }
@@ -250,6 +262,11 @@ struct Key {
             }
         case .globe:
             return "◉" // Fallback if SF Symbol rendering fails
+        case .configuration(let config):
+            switch config {
+            case .toggleAutocorrect:
+                return "AC"
+            }
         case .empty:
             return ""
         }
@@ -268,6 +285,8 @@ struct Key {
             return labelText.count > 1 ? 12 : 16
         case .layoutSwitch:
             return 12
+        case .configuration:
+            return 12
         }
     }
 
@@ -283,6 +302,8 @@ struct Key {
             let labelText = self.label(shiftState: .unshifted)
             return labelText.count > 1 ? deviceLayout.smallFontSize : deviceLayout.specialFontSize
         case .layoutSwitch:
+            return deviceLayout.smallFontSize
+        case .configuration:
             return deviceLayout.smallFontSize
         }
     }
@@ -302,7 +323,7 @@ struct Key {
             case .shifted, .capsLock:
                 return tapped ? theme.secondaryKeyColor : theme.primaryKeyColor
             }
-        case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe:
+        case .backspace, .enter, .layerSwitch, .layoutSwitch, .globe, .configuration:
             return tapped ? theme.primaryKeyColor : theme.secondaryKeyColor
         case .empty:
             return UIColor.clear
@@ -311,7 +332,7 @@ struct Key {
 
     func feedbackPattern() -> FeedbackPattern {
         switch keyType {
-        case .simple, .shift, .layerSwitch, .layoutSwitch:
+        case .simple, .shift, .layerSwitch, .layoutSwitch, .configuration:
             return .subtle
         case .space, .enter:
             return .light
@@ -326,7 +347,7 @@ struct Key {
         switch keyType {
         case .simple, .backspace, .enter, .space:
             return true
-        case .shift, .layerSwitch, .layoutSwitch, .globe, .empty:
+        case .shift, .layerSwitch, .layoutSwitch, .globe, .configuration, .empty:
             return false
         }
     }

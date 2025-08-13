@@ -84,10 +84,10 @@
 - [x] Implement suggestion selection and insertion
 - [x] Add enhanced auto-correction with prediction integration
 - [ ] Access UILexicon for user's personal dictionary and learned words
-- [ ] Respect UITextInputTraits settings (autocapitalization, autocorrection preferences)
 
 ### Context-Aware Tuning
 - [ ] Implement smart backspace (context-aware deletion)
+- [ ] Implement smart shifting
 - [ ] Adjust key touch areas based on next letter probability
 
 ## Milestone 8: Swipe-to-Type Foundation

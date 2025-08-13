@@ -114,7 +114,7 @@ enum KeyboardLayout: Equatable {
             ]
         case .number:
             return [
-                [Key(.empty), Key(.simple("6"), longPressBehavior: .alternates(["~", "λ", "l", "L"])), Key(.simple("5"), longPressBehavior: .alternates(["\\", "°", "y", "Y"])), Key(.simple("4"), longPressBehavior: .alternates(["{", "•", "p", "P"])), Key(.empty), Key(.layoutSwitch(.qwerty)), Key(.empty), Key(.empty), Key(.empty), apostrophe],
+                [Key(.empty), Key(.simple("6"), longPressBehavior: .alternates(["~", "λ", "l", "L"])), Key(.simple("5"), longPressBehavior: .alternates(["\\", "°", "y", "Y"])), Key(.simple("4"), longPressBehavior: .alternates(["{", "•", "p", "P"])), Key(.empty), Key(.layoutSwitch(.qwerty)), Key(.configuration(.toggleAutocorrect)), Key(.empty), Key(.empty), apostrophe],
                 [Key(.empty), Key(.simple("3"), longPressBehavior: .alternates(["*", "r", "R"])), Key(.simple("2"), longPressBehavior: .alternates(["=", "s", "S"])), Key(.simple("1"), longPressBehavior: .alternates(["(", "t", "T"])), Key(.simple("0"), longPressBehavior: .alternates(["<", "g", "G"])), Key(.empty), Key(.empty), Key(.empty), Key(.empty), Key(.empty)],
                 [Key(.empty), Key(.simple("9"), longPressBehavior: .alternates(["@", "£", "j", "J"])), Key(.simple("8"), longPressBehavior: .alternates(["_", "¥", "v", "V"])), Key(.simple("7"), longPressBehavior: .alternates(["[", "€", "d", "D"])), Key(.empty), Key(.empty), Key(.empty), period, comma, Key(.enter)],
                 [Key(.globe), Key(.layerSwitch(.alpha)), Key(.shift, doubleTapBehavior: .capsLock), Key(.backspace, longPressBehavior: .repeating), Key(.space), Key(.layerSwitch(.symbol))],
@@ -171,7 +171,7 @@ enum KeyboardLayout: Equatable {
                 case .layerSwitch, .shift, .backspace:
                     // Make special keys narrower when globe key is present
                     keyWidth = needsGlobe ? layout.alphaKeyWidth * 1.3 : (layout.alphaKeyWidth * 1.5 + layout.horizontalGap * 0.5)
-                case .simple, .enter, .layoutSwitch, .globe, .empty:
+                case .simple, .enter, .layoutSwitch, .globe, .configuration, .empty:
                     keyWidth = layout.alphaKeyWidth
                 }
                 nodeRow.append(.key(key, keyWidth))
@@ -274,7 +274,7 @@ enum KeyboardLayout: Equatable {
             return qwertyEnterKeyWidth(layout, needsGlobe: needsGlobe)
         case .layerSwitch, .shift, .backspace, .layoutSwitch:
             return qwertySpecialKeyWidth(layout)
-        case .simple, .globe, .empty:
+        case .simple, .globe, .configuration, .empty:
             // Third row simple keys are 40% larger on number/symbol layers
             if rowIndex == 2 && (layer == .number || layer == .symbol) {
                 return qwertyThirdRowSimpleKeyWidth(layout)

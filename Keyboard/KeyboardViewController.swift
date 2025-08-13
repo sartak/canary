@@ -27,11 +27,12 @@ class KeyboardViewController: UIInputViewController {
     private var suggestionService: SuggestionService!
     private var pendingRefresh = false
     private var maybePunctuating = false
-    private var autocorrectEnabled = true
+    private var autocorrectAppDisabled = false
+    private var autocorrectUserDisabled = false
 
     // Expose autocorrect state for testing/debugging
     var isAutocorrectEnabled: Bool {
-        return autocorrectEnabled
+        return !autocorrectAppDisabled && !autocorrectUserDisabled
     }
 
     // Key repeat support
@@ -98,6 +99,7 @@ class KeyboardViewController: UIInputViewController {
         keyboardTouchView.backgroundColor = UIColor.clear
         keyboardTouchView.currentShiftState = currentShiftState
         keyboardTouchView.deviceLayout = deviceLayout
+        keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
 
@@ -342,8 +344,11 @@ class KeyboardViewController: UIInputViewController {
                               globeHandler: { [weak self] in
                                   self?.advanceToNextInputMode()
                               },
+                              configurationHandler: { [weak self] config in
+                                  self?.handleConfiguration(config)
+                              },
                               maybePunctuating: maybePunctuating,
-                              autocorrectEnabled: autocorrectEnabled,
+                              autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled,
                               autocorrectVisualHandler: { [weak self] originalWord, correctedWord, _ in
                                   self?.showAutocorrectFeedback(from: originalWord, to: correctedWord, for: keyData)
                               })
@@ -574,7 +579,7 @@ class KeyboardViewController: UIInputViewController {
             let after = self.textDocumentProxy.documentContextAfterInput
             let selected = self.textDocumentProxy.selectedText
 
-            self.suggestionService.updateContext(before: before, after: after, selected: selected)
+            self.suggestionService.updateContext(before: before, after: after, selected: selected, autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled)
             let suggestions = self.suggestionService.getSuggestions()
 
             self.suggestionView.updateSuggestions(suggestions) { [weak self] actions in
@@ -632,6 +637,7 @@ class KeyboardViewController: UIInputViewController {
     private func updateKeyboardForShiftChange() {
         // Update display state and key data - gesture recognizer persists now
         keyboardTouchView.currentShiftState = currentShiftState
+        keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
     }
@@ -714,14 +720,22 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func disableAutocorrect() {
-        if autocorrectEnabled {
-            autocorrectEnabled = false
-        }
+        autocorrectAppDisabled = true
+        refreshSuggestions()
     }
 
     private func enableAutocorrect() {
-        if !autocorrectEnabled {
-            autocorrectEnabled = true
+        autocorrectAppDisabled = false
+        refreshSuggestions()
+    }
+
+    private func handleConfiguration(_ config: Configuration) {
+        switch config {
+        case .toggleAutocorrect:
+            autocorrectUserDisabled.toggle()
+            keyboardTouchView?.autocorrectEnabled = !autocorrectUserDisabled
+            keyboardTouchView?.setNeedsDisplay()
+            refreshSuggestions()
         }
     }
 }

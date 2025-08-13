@@ -37,17 +37,17 @@ class SuggestionService {
         self.typeaheadService = typeaheadService
     }
 
-    func updateContext(before: String?, after: String?, selected: String?) {
+    func updateContext(before: String?, after: String?, selected: String?, autocorrectEnabled: Bool = true) {
         self.contextBefore = before
         self.contextAfter = after
         self.selectedText = selected
         self.typeaheadSuggestions = nil
 
         // Update proactive typo correction
-        updateProactiveTypoCorrection()
+        updateProactiveTypoCorrection(autocorrectEnabled: autocorrectEnabled)
     }
 
-    private func updateProactiveTypoCorrection() {
+    private func updateProactiveTypoCorrection(autocorrectEnabled: Bool = true) {
         let (prefix, _) = extractCurrentWordContext()
         let newWord = prefix.lowercased()
 
@@ -59,7 +59,7 @@ class SuggestionService {
             typoTask?.cancel()
             typoService.cancel()
 
-            if newWord.isEmpty {
+            if newWord.isEmpty || !autocorrectEnabled {
                 typoCandidates = []
                 return
             }
