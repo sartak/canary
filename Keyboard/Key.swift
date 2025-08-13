@@ -73,11 +73,11 @@ struct Key {
         return text.count == 1 && autocorrectTriggers.contains(text.first!)
     }
 
-    static func autocorrectWord(_ word: String, using predictionService: PredictionService) -> String {
+    static func autocorrectWord(_ word: String, using suggestionService: SuggestionService) -> String {
         let trimmedWord = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedWord.isEmpty else { return word }
 
-        return predictionService.correctTypo(word: trimmedWord) ?? word
+        return suggestionService.correctTypo(word: trimmedWord) ?? word
     }
 
     static func getCurrentWord(from textDocumentProxy: UITextDocumentProxy) -> (word: String, range: NSRange)? {
@@ -89,7 +89,7 @@ struct Key {
         var wordStart = beforeInput.count
         for (index, _) in beforeInput.reversed().enumerated() {
             let currentIndex = beforeInput.index(beforeInput.endIndex, offsetBy: -(index + 1))
-            if !PredictionService.isWordCharacter(in: beforeInput, at: currentIndex) {
+            if !SuggestionService.isWordCharacter(in: beforeInput, at: currentIndex) {
                 wordStart = beforeInput.count - index
                 break
             }
@@ -121,12 +121,12 @@ struct Key {
         textDocumentProxy.insertText(newWord)
     }
 
-    static func applyAutocorrectWithVisual(to textDocumentProxy: UITextDocumentProxy, at position: CGPoint, using predictionService: PredictionService, visualHandler: @escaping (String, String, CGPoint) -> Void) {
+    static func applyAutocorrectWithVisual(to textDocumentProxy: UITextDocumentProxy, at position: CGPoint, using suggestionService: SuggestionService, visualHandler: @escaping (String, String, CGPoint) -> Void) {
         guard let wordInfo = getCurrentWord(from: textDocumentProxy) else {
             return
         }
 
-        let correctedWord = autocorrectWord(wordInfo.word, using: predictionService)
+        let correctedWord = autocorrectWord(wordInfo.word, using: suggestionService)
 
         // Only show visual feedback and apply correction if the word actually changed
         if correctedWord != wordInfo.word {
@@ -135,14 +135,14 @@ struct Key {
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, predictionService: PredictionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, autocorrectVisualHandler: @escaping (String, String, CGPoint) -> Void = { _, _, _ in }) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, autocorrectVisualHandler: @escaping (String, String, CGPoint) -> Void = { _, _, _ in }) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
             // Check if this character should trigger autocorrect
             if autocorrectEnabled && Key.shouldTriggerAutocorrect(text) {
                 // Apply autocorrect with visual feedback
-                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: suggestionService, visualHandler: autocorrectVisualHandler)
             }
 
             // Handle spacing for punctuation
@@ -162,13 +162,13 @@ struct Key {
         case .enter:
             // Apply autocorrect with visual feedback before line break
             if autocorrectEnabled {
-                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: suggestionService, visualHandler: autocorrectVisualHandler)
             }
             textDocumentProxy.insertText("\n")
         case .space:
             // Apply autocorrect with visual feedback before inserting space
             if autocorrectEnabled {
-                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: predictionService, visualHandler: autocorrectVisualHandler)
+                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: suggestionService, visualHandler: autocorrectVisualHandler)
             }
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):

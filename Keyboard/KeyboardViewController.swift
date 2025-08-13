@@ -23,8 +23,8 @@ class KeyboardViewController: UIInputViewController {
     private var cutButton: UIButton!
     private var copyButton: UIButton!
     private var pasteButton: UIButton!
-    private var predictionView: PredictionView!
-    private var predictionService: PredictionService!
+    private var suggestionView: SuggestionView!
+    private var suggestionService: SuggestionService!
     private var pendingRefresh = false
     private var maybePunctuating = false
     private var autocorrectEnabled = true
@@ -175,7 +175,7 @@ class KeyboardViewController: UIInputViewController {
 
             setupDismissButton()
             setupEditingButtons()
-            setupPredictionView()
+            setupSuggestionView()
         }
     }
 
@@ -326,7 +326,7 @@ class KeyboardViewController: UIInputViewController {
 
     private func performKeyAction(_ keyData: KeyData) {
         keyData.key.didTap(textDocumentProxy: textDocumentProxy,
-                              predictionService: predictionService,
+                              suggestionService: suggestionService,
                               layerSwitchHandler: { [weak self] newLayer in
                                   self?.switchToLayer(newLayer)
                               },
@@ -514,17 +514,21 @@ class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func setupPredictionView() {
-        predictionService = PredictionService()
-        predictionView = PredictionView(deviceLayout: deviceLayout)
+    private func setupSuggestionView() {
+        guard let suggestionService = SuggestionService() else {
+            print("KeyboardViewController: Failed to initialize SuggestionService")
+            return
+        }
+        self.suggestionService = suggestionService
+        suggestionView = SuggestionView(deviceLayout: deviceLayout)
 
-        view.addSubview(predictionView)
+        view.addSubview(suggestionView)
 
-        // Position the prediction view to use the full topPadding height
-        let predictionY: CGFloat = 0
-        let predictionHeight = deviceLayout.topPadding
+        // Position the suggestion view to use the full topPadding height
+        let suggestionY: CGFloat = 0
+        let suggestionHeight = deviceLayout.topPadding
 
-        // Calculate available space for predictions (left side of editing buttons)
+        // Calculate available space for suggestions (left side of editing buttons)
         let containerWidth = view.bounds.width
         let dismissRightOffset = calculateDismissButtonOffset()
         let editingButtonsWidth = dismissButtonSize * 4 + deviceLayout.editingButtonSpacing * 3 // 4 buttons + 3 gaps
@@ -539,11 +543,11 @@ class KeyboardViewController: UIInputViewController {
         }
         let firstRow = keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe)[0]
         let rowWidth = Node.calculateRowWidth(for: firstRow)
-        let predictionX = (containerWidth - rowWidth) / 2
+        let suggestionX = (containerWidth - rowWidth) / 2
 
-        let availableWidth = containerWidth - dismissRightOffset - editingButtonsWidth - predictionX - deviceLayout.predictionGap
+        let availableWidth = containerWidth - dismissRightOffset - editingButtonsWidth - suggestionX - deviceLayout.suggestionGap
 
-        predictionView.frame = CGRect(x: predictionX, y: predictionY, width: availableWidth, height: predictionHeight)
+        suggestionView.frame = CGRect(x: suggestionX, y: suggestionY, width: availableWidth, height: suggestionHeight)
 
         // Update with initial suggestions
         refreshSuggestions()
@@ -570,17 +574,17 @@ class KeyboardViewController: UIInputViewController {
             let after = self.textDocumentProxy.documentContextAfterInput
             let selected = self.textDocumentProxy.selectedText
 
-            self.predictionService.updateContext(before: before, after: after, selected: selected)
-            let suggestions = self.predictionService.getSuggestions()
+            self.suggestionService.updateContext(before: before, after: after, selected: selected)
+            let suggestions = self.suggestionService.getSuggestions()
 
-            self.predictionView.updateSuggestions(suggestions) { [weak self] actions in
+            self.suggestionView.updateSuggestions(suggestions) { [weak self] actions in
                 self?.executeActions(actions)
                 self?.refreshSuggestions()
             }
         }
     }
 
-    private func executeActions(_ actions: [PredictionAction]) {
+    private func executeActions(_ actions: [InputAction]) {
         for action in actions {
             switch action {
             case .insert(let text):

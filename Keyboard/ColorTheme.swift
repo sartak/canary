@@ -85,11 +85,11 @@ enum ColorTheme {
         return UIColor.systemBlue
     }
 
-    var predictionTextColor: UIColor {
+    var suggestionTextColor: UIColor {
         return textColor.withAlphaComponent(0.7)
     }
 
-    var predictionDividerColor: UIColor {
+    var suggestionDividerColor: UIColor {
         return textColor.withAlphaComponent(0.1)
     }
 

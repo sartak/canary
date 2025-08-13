@@ -1,10 +1,10 @@
 import UIKit
 
-class PredictionView: UIView {
-    private var suggestions: [(String, [PredictionAction])] = []
+class SuggestionView: UIView {
+    private var suggestions: [(String, [InputAction])] = []
     private var suggestionButtons: [UIButton] = []
     private var deviceLayout: DeviceLayout
-    private var onSuggestionTapped: (([PredictionAction]) -> Void)?
+    private var onSuggestionTapped: (([InputAction]) -> Void)?
     private var scrollView: UIScrollView!
 
     init(deviceLayout: DeviceLayout) {
@@ -27,7 +27,7 @@ class PredictionView: UIView {
         addSubview(scrollView)
     }
 
-    func updateSuggestions(_ suggestions: [(String, [PredictionAction])], onTapped: @escaping ([PredictionAction]) -> Void) {
+    func updateSuggestions(_ suggestions: [(String, [InputAction])], onTapped: @escaping ([InputAction]) -> Void) {
         self.suggestions = suggestions
         self.onSuggestionTapped = onTapped
 
@@ -48,16 +48,16 @@ class PredictionView: UIView {
         layoutSuggestions()
     }
 
-    private func createSuggestionButton(label: String, actions: [PredictionAction]) -> UIButton {
+    private func createSuggestionButton(label: String, actions: [InputAction]) -> UIButton {
         var config = UIButton.Configuration.plain()
         let theme = ColorTheme.current(for: traitCollection)
 
         config.title = label
-        config.baseForegroundColor = theme.predictionTextColor
+        config.baseForegroundColor = theme.suggestionTextColor
         config.titleAlignment = .leading
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
             var outgoing = incoming
-            outgoing.font = UIFont.systemFont(ofSize: self.deviceLayout.predictionFontSize)
+            outgoing.font = UIFont.systemFont(ofSize: self.deviceLayout.suggestionFontSize)
             return outgoing
         }
 
@@ -90,12 +90,12 @@ class PredictionView: UIView {
             // Calculate button width based on text content plus padding
             let text = button.configuration?.title ?? ""
             let textSize = (text as NSString).size(withAttributes: [
-                .font: UIFont.systemFont(ofSize: deviceLayout.predictionFontSize)
+                .font: UIFont.systemFont(ofSize: deviceLayout.suggestionFontSize)
             ])
 
             // First button gets no left padding, others get normal padding
-            let leftPadding = index == 0 ? 0 : deviceLayout.predictionGap
-            let rightPadding = deviceLayout.predictionGap
+            let leftPadding = index == 0 ? 0 : deviceLayout.suggestionGap
+            let rightPadding = deviceLayout.suggestionGap
 
             // Add small buffer to prevent text truncation in UIButton
             let textBuffer: CGFloat = 4.0
@@ -112,7 +112,7 @@ class PredictionView: UIView {
             // Add divider line after each button except the last one
             if index < suggestionButtons.count - 1 {
                 let dividerLayer = CALayer()
-                dividerLayer.backgroundColor = theme.predictionDividerColor.cgColor
+                dividerLayer.backgroundColor = theme.suggestionDividerColor.cgColor
                 dividerLayer.frame = CGRect(x: button.frame.maxX, y: buttonY, width: 0.5, height: buttonHeight)
                 scrollView.layer.addSublayer(dividerLayer)
             }
