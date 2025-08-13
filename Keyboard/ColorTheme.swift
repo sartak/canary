@@ -85,7 +85,7 @@ enum ColorTheme {
         return UIColor.systemBlue
     }
 
-    var suggestionTextColor: UIColor {
+    var typeaheadTextColor: UIColor {
         return textColor.withAlphaComponent(0.7)
     }
 

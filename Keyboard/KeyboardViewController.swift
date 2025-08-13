@@ -527,6 +527,14 @@ class KeyboardViewController: UIInputViewController {
         self.suggestionService = suggestionService
         suggestionView = SuggestionView(deviceLayout: deviceLayout)
 
+
+        suggestionService.delegate = suggestionView
+
+        suggestionView.setOnTypeaheadTapped { [weak self] actions in
+            self?.executeActions(actions)
+            self?.refreshSuggestions()
+        }
+
         view.addSubview(suggestionView)
 
         // Position the suggestion view to use the full topPadding height
@@ -553,9 +561,6 @@ class KeyboardViewController: UIInputViewController {
         let availableWidth = containerWidth - dismissRightOffset - editingButtonsWidth - suggestionX - deviceLayout.suggestionGap
 
         suggestionView.frame = CGRect(x: suggestionX, y: suggestionY, width: availableWidth, height: suggestionHeight)
-
-        // Update with initial suggestions
-        refreshSuggestions()
     }
 
     private func resetMaybePunctuating() {
@@ -580,12 +585,6 @@ class KeyboardViewController: UIInputViewController {
             let selected = self.textDocumentProxy.selectedText
 
             self.suggestionService.updateContext(before: before, after: after, selected: selected, autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled)
-            let suggestions = self.suggestionService.getSuggestions()
-
-            self.suggestionView.updateSuggestions(suggestions) { [weak self] actions in
-                self?.executeActions(actions)
-                self?.refreshSuggestions()
-            }
         }
     }
 

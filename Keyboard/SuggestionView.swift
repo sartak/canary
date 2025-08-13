@@ -1,10 +1,11 @@
 import UIKit
 
-class SuggestionView: UIView {
-    private var suggestions: [(String, [InputAction])] = []
-    private var suggestionButtons: [UIButton] = []
+class SuggestionView: UIView, SuggestionServiceDelegate {
     private var deviceLayout: DeviceLayout
-    private var onSuggestionTapped: (([InputAction]) -> Void)?
+
+    private var typeaheads: [(String, [InputAction])] = []
+    private var onTypeaheadTapped: (([InputAction]) -> Void)?
+
     private var scrollView: UIScrollView!
 
     init(deviceLayout: DeviceLayout) {
@@ -27,33 +28,16 @@ class SuggestionView: UIView {
         addSubview(scrollView)
     }
 
-    func updateSuggestions(_ suggestions: [(String, [InputAction])], onTapped: @escaping ([InputAction]) -> Void) {
-        self.suggestions = suggestions
-        self.onSuggestionTapped = onTapped
-
-        scrollView.contentOffset.x = 0
-
-        // Clear existing UI completely
-        scrollView.subviews.forEach { $0.removeFromSuperview() }
-        scrollView.layer.sublayers?.removeAll()
-        suggestionButtons.removeAll()
-
-        // Create new buttons for each suggestion
-        for (label, actions) in suggestions {
-            let button = createSuggestionButton(label: label, actions: actions)
-            scrollView.addSubview(button)
-            suggestionButtons.append(button)
-        }
-
-        layoutSuggestions()
+    func setOnTypeaheadTapped(_ onTapped: @escaping ([InputAction]) -> Void) {
+        self.onTypeaheadTapped = onTapped
     }
 
-    private func createSuggestionButton(label: String, actions: [InputAction]) -> UIButton {
+    private func createTypeaheadButton(label: String, actions: [InputAction]) -> UIButton {
         var config = UIButton.Configuration.plain()
         let theme = ColorTheme.current(for: traitCollection)
 
         config.title = label
-        config.baseForegroundColor = theme.suggestionTextColor
+        config.baseForegroundColor = theme.typeaheadTextColor
         config.titleAlignment = .leading
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
             var outgoing = incoming
@@ -62,31 +46,36 @@ class SuggestionView: UIView {
         }
 
         let button = UIButton(configuration: config)
-        button.addTarget(self, action: #selector(suggestionButtonTapped), for: .touchUpInside)
-
-        // Store the actions in the button's tag (we'll use a lookup approach)
-        let buttonIndex = suggestionButtons.count
-        button.tag = buttonIndex
+        button.addTarget(self, action: #selector(typeaheadButtonTapped), for: .touchUpInside)
 
         return button
     }
 
-    @objc private func suggestionButtonTapped(_ sender: UIButton) {
+    @objc private func typeaheadButtonTapped(_ sender: UIButton) {
         let buttonIndex = sender.tag
-        guard buttonIndex < suggestions.count else { return }
-        let actions = suggestions[buttonIndex].1
-        onSuggestionTapped?(actions)
+        guard buttonIndex < typeaheads.count else { return }
+        let actions = typeaheads[buttonIndex].1
+        onTypeaheadTapped?(actions)
     }
 
     private func layoutSuggestions() {
-        guard !suggestionButtons.isEmpty else { return }
+        scrollView.contentOffset.x = 0
+
+        // Clear existing UI completely
+        scrollView.subviews.forEach { $0.removeFromSuperview() }
+        scrollView.layer.sublayers?.removeAll()
 
         let theme = ColorTheme.current(for: traitCollection)
         var currentX: CGFloat = 0
         let buttonHeight = deviceLayout.topPadding - deviceLayout.verticalGap
         let buttonY = (bounds.height - buttonHeight) / 2
 
-        for (index, button) in suggestionButtons.enumerated() {
+        // Create and layout buttons for each typeahead
+        for (index, (label, actions)) in typeaheads.enumerated() {
+            let button = createTypeaheadButton(label: label, actions: actions)
+            button.tag = index
+            scrollView.addSubview(button)
+
             // Calculate button width based on text content plus padding
             let text = button.configuration?.title ?? ""
             let textSize = (text as NSString).size(withAttributes: [
@@ -110,7 +99,7 @@ class SuggestionView: UIView {
             currentX += buttonWidth
 
             // Add divider line after each button except the last one
-            if index < suggestionButtons.count - 1 {
+            if index < typeaheads.count - 1 {
                 let dividerLayer = CALayer()
                 dividerLayer.backgroundColor = theme.suggestionDividerColor.cgColor
                 dividerLayer.frame = CGRect(x: button.frame.maxX, y: buttonY, width: 0.5, height: buttonHeight)
@@ -125,6 +114,14 @@ class SuggestionView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         scrollView.frame = bounds
+        layoutSuggestions()
+    }
+
+    // MARK: - SuggestionServiceDelegate
+
+    func suggestionService(_ service: SuggestionService, didUpdateTypeahead suggestions: [(String, [InputAction])]) {
+        self.typeaheads = suggestions
+        self.onTypeaheadTapped = onTypeaheadTapped ?? { _ in }
         layoutSuggestions()
     }
 }

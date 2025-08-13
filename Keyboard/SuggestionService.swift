@@ -1,5 +1,9 @@
 import Foundation
 
+protocol SuggestionServiceDelegate: AnyObject {
+    func suggestionService(_ service: SuggestionService, didUpdateTypeahead suggestions: [(String, [InputAction])])
+}
+
 enum InputAction {
     case insert(String)
     case moveCursor(Int)  // positive = forward, negative = backward
@@ -7,12 +11,13 @@ enum InputAction {
 }
 
 class SuggestionService {
+    weak var delegate: SuggestionServiceDelegate?
+
     private var contextBefore: String?
     private var contextAfter: String?
     private var selectedText: String?
 
     private var typeaheadService: TypeaheadService
-    private var typeaheadSuggestions: [(String, [InputAction])]?
 
     private var typoService: TypoService
     private var typoCurrentWord: String = ""
@@ -41,10 +46,12 @@ class SuggestionService {
         self.contextBefore = before
         self.contextAfter = after
         self.selectedText = selected
-        self.typeaheadSuggestions = nil
 
         // Update proactive typo correction
         updateProactiveTypoCorrection(autocorrectEnabled: autocorrectEnabled)
+
+        let suggestions = makeSuggestions()
+        delegate?.suggestionService(self, didUpdateTypeahead: suggestions)
     }
 
     private func updateProactiveTypoCorrection(autocorrectEnabled: Bool = true) {
@@ -103,16 +110,6 @@ class SuggestionService {
             typoTask = task
             typoQueue.async(execute: task)
         }
-    }
-
-    func getSuggestions() -> [(String, [InputAction])] {
-        if let cached = typeaheadSuggestions {
-            return cached
-        }
-
-        let suggestions = makeSuggestions()
-        typeaheadSuggestions = suggestions
-        return suggestions
     }
 
     private func makeSuggestions() -> [(String, [InputAction])] {
