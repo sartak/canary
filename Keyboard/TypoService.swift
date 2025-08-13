@@ -52,6 +52,10 @@ class TypoService {
         sqlite3_close(db)
     }
 
+    func cancel() {
+        sqlite3_interrupt(db)
+    }
+
     func suggestTypoCorrections(for word: String, maxDistance: Int, task: DispatchWorkItem? = nil) -> [(String, Int, Int)]? {
         return queryBKTree(word: word, maxDistance: maxDistance, task: task)
     }

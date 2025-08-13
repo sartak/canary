@@ -57,6 +57,7 @@ class SuggestionService {
 
             // Cancel any existing search
             typoTask?.cancel()
+            typoService.cancel()
 
             if newWord.isEmpty {
                 typoCandidates = []
