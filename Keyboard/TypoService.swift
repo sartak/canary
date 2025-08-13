@@ -37,50 +37,32 @@ class TypoService {
         sqlite3_interrupt(db)
     }
 
-    func suggestTypoCorrections(for word: String, maxDistance: Int, task: DispatchWorkItem? = nil) -> [(String, Int, Int)]? {
-        // Progressive search: try distance=1 first, only do distance=2 if no results
-
-        // First try distance=1 (most common typos)
-        if let results1 = querySymSpell(word: word, maxDistance: 1, task: task) {
-            if !results1.isEmpty {
-                return results1 // Found good corrections, done!
+    func findBestCorrection(for word: String, maxDistance: Int, task: DispatchWorkItem? = nil) -> String? {
+        for distance in 1...maxDistance {
+            if let result = querySymSpell(word: word, exactDistance: distance, task: task) {
+                return result
             }
-        } else {
-            return nil // Search was cancelled
         }
-
-        // Only if no distance=1 corrections and maxDistance allows, try distance=2
-        if maxDistance >= 2 {
-            return querySymSpell(word: word, maxDistance: 2, task: task)
-        }
-
-        return [] // No results found
+        return nil
     }
 
-    private func querySymSpell(word: String, maxDistance: Int, task: DispatchWorkItem?) -> [(String, Int, Int)]? {
-        var candidates: [(String, Int, Int)] = [] // (word, distance, frequency_rank)
-        var processedWords: Set<String> = []
-
-        // Check if search was cancelled
+    private func querySymSpell(word: String, exactDistance: Int, task: DispatchWorkItem?) -> String? {
         if task?.isCancelled == true {
             return nil
         }
 
-        // Generate deletes for the input word
-        let deletes = generateDeletes(word: word, maxEditDistance: maxDistance)
+        let deletes = generateDeletes(word: word, maxEditDistance: exactDistance)
         let deleteHashes = deletes.map { hashString($0) }
 
-        // Get or create cached batch query statement
         let hashCount = deleteHashes.count
         let batchStatement: OpaquePointer
 
         if let cachedStatement = batchQueryCache[hashCount] {
             batchStatement = cachedStatement
         } else {
-            // Create new batch query with IN clause
             let placeholders = Array(repeating: "?", count: hashCount).joined(separator: ",")
             let batchQuery = """
-                SELECT DISTINCT word, frequency_rank
+                SELECT word, frequency_rank
                 FROM symspell_deletes
                 WHERE delete_hash IN (\(placeholders))
                 ORDER BY frequency_rank ASC
@@ -89,46 +71,29 @@ class TypoService {
             var newStatement: OpaquePointer?
             guard sqlite3_prepare_v2(db, batchQuery, -1, &newStatement, nil) == SQLITE_OK,
                   let statement = newStatement else {
-                return candidates
+                return nil
             }
 
             batchQueryCache[hashCount] = statement
             batchStatement = statement
         }
 
-        // Bind all delete hashes
         for (index, deleteHash) in deleteHashes.enumerated() {
             sqlite3_bind_int64(batchStatement, Int32(index + 1), deleteHash)
         }
 
-        // Execute batch query
         while true {
             let stepResult = sqlite3_step(batchStatement)
             if stepResult == SQLITE_ROW {
                 let candidateWordPtr = sqlite3_column_text(batchStatement, 0)
                 let candidateWord = String(cString: candidateWordPtr!)
-                let frequencyRank = Int(sqlite3_column_int(batchStatement, 1))
 
-                // Avoid processing the same word multiple times
-                if !processedWords.contains(candidateWord) {
-                    processedWords.insert(candidateWord)
-
-                    let distance = levenshteinDistance(word, candidateWord, maxDistance: maxDistance)
-                    if distance <= maxDistance {
-                        candidates.append((candidateWord, distance, frequencyRank))
-
-                        // Early exit: found distance <= 1 result, which is likely the best
-                        if distance <= 1 {
-                            sqlite3_reset(batchStatement)
-                            sqlite3_clear_bindings(batchStatement)
-                            return candidates
-                        }
-                    }
+                let distance = levenshteinDistance(word, candidateWord, maxDistance: exactDistance)
+                if distance == exactDistance {
+                    sqlite3_reset(batchStatement)
+                    sqlite3_clear_bindings(batchStatement)
+                    return candidateWord
                 }
-            } else if stepResult == SQLITE_INTERRUPT {
-                sqlite3_reset(batchStatement)
-                sqlite3_clear_bindings(batchStatement)
-                return nil
             } else {
                 break
             }
@@ -136,10 +101,10 @@ class TypoService {
 
         sqlite3_reset(batchStatement)
         sqlite3_clear_bindings(batchStatement)
-        return candidates
+        return nil
     }
 
-    private func generateDeletes(word: String, maxEditDistance: Int, prefixLength: Int = 7) -> Set<String> {
+    private func generateDeletes(word: String, maxEditDistance: Int) -> Set<String> {
         var deletes: Set<String> = []
 
         func generateDeletesRecursive(chars: [Character], editDistance: Int) {
@@ -147,13 +112,10 @@ class TypoService {
             deletes.insert(word)
 
             if editDistance < maxEditDistance {
-                // Apply prefix length limit like Python version
-                let charsToProcess = chars.count > prefixLength ? Array(chars.prefix(prefixLength)) : chars
-
-                if charsToProcess.count > 1 {
-                    for i in 0..<charsToProcess.count {
+                if chars.count > 1 {
+                    for i in 0..<chars.count {
                         // Create new array with character at index i removed
-                        var deletedChars = charsToProcess
+                        var deletedChars = chars
                         deletedChars.remove(at: i)
 
                         let deletedWord = String(deletedChars)
@@ -178,8 +140,7 @@ class TypoService {
         return hashValue
     }
 
-
-    private func levenshteinDistance(_ s1: String, _ s2: String, maxDistance: Int = 2) -> Int {
+    private func levenshteinDistance(_ s1: String, _ s2: String, maxDistance: Int) -> Int {
         // Convert to UTF-8 bytes for SIMD operations
         let a = Array(s1.utf8)
         let b = Array(s2.utf8)

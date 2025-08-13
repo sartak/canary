@@ -16,10 +16,10 @@ class SuggestionService {
 
     private var typoService: TypoService
     private var typoCurrentWord: String = ""
-    private var typoCandidates: [(String, Int, Int)]? = nil // nil = not completed, [] = completed with no results, [results] = completed with results
+    private var typoResult: String?? = nil // nil = not completed, .some(nil) = completed with no result, .some(result) = completed with result
     private var typoQueue: DispatchQueue
     private var typoTask: DispatchWorkItem?
-    private var typoCompletion: ([(String, Int, Int)]?) -> Void = { _ in }
+    private var typoCompletion: (String?) -> Void = { _ in }
 
     init?() {
         typoQueue = DispatchQueue(label: "typo-correction", qos: .userInitiated)
@@ -60,12 +60,12 @@ class SuggestionService {
             typoService.cancel()
 
             if newWord.isEmpty || !autocorrectEnabled {
-                typoCandidates = []
+                typoResult = .some(nil)
                 return
             }
 
             // Mark search as not completed
-            typoCandidates = nil
+            typoResult = nil
 
             // Start new background search
             var task: DispatchWorkItem!
@@ -80,29 +80,23 @@ class SuggestionService {
                 }
 
                 let startTime = CFAbsoluteTimeGetCurrent()
-                let candidates = self.typoService.suggestTypoCorrections(for: newWord, maxDistance: 2, task: task)
+                let correction = self.autocorrect(for: newWord, task: task)
                 let endTime = CFAbsoluteTimeGetCurrent()
                 let duration = (endTime - startTime) * 1000 // Convert to milliseconds
 
-                if let candidates = candidates {
-                    print("TypoService: '\(newWord)' -> \(candidates.count) candidates in \(String(format: "%.3f", duration))ms")
+                if let correction = correction {
+                    print("TypoService: '\(newWord)' -> '\(correction)' in \(String(format: "%.3f", duration))ms")
                 } else {
-                    print("TypoService: '\(newWord)' -> cancelled after \(String(format: "%.3f", duration))ms")
+                    print("TypoService: '\(newWord)' -> no correction in \(String(format: "%.3f", duration))ms")
                 }
 
                 // Call completion handler immediately (not on main thread to avoid deadlock)
-                // But update proactiveCandidates on main thread
+                // But update proactive result on main thread
                 if newWord == self.typoCurrentWord {
-                    if let candidates = candidates {
-                        DispatchQueue.main.async {
-                            self.typoCandidates = candidates
-                        }
-                        self.typoCompletion(candidates)
-                    } else {
-                        self.typoCompletion(nil)
+                    DispatchQueue.main.async {
+                        self.typoResult = .some(correction)
                     }
-                } else {
-                    self.typoCompletion(nil)
+                    self.typoCompletion(correction)
                 }
             }
 
@@ -312,6 +306,10 @@ class SuggestionService {
         return (prefix, suffix)
     }
 
+    private func autocorrect(for word: String, task: DispatchWorkItem? = nil) -> String? {
+        return typoService.findBestCorrection(for: word, maxDistance: 2, task: task)
+    }
+
     func correctTypo(word: String) -> String? {
         let trimmedWord = word.trimmingCharacters(in: .whitespaces)
 
@@ -334,48 +332,41 @@ class SuggestionService {
             }
         }
 
-        // Use proactive candidates if available and current
-        let candidates: [(String, Int, Int)]?
+        // Use proactive result if available and current
+        let candidate: String?
         var wasCanceled = false
 
         if trimmedWord.lowercased() == typoCurrentWord {
-            if let proactiveResults = typoCandidates {
+            if let proactiveResult = typoResult {
                 // Search already completed proactively - user wait time is essentially 0
-                candidates = proactiveResults
+                candidate = proactiveResult
             } else if let task = typoTask, !task.isCancelled {
                 // Search still running - user must wait for completion
                 let semaphore = DispatchSemaphore(value: 0)
-                var taskResults: [(String, Int, Int)]?
+                var taskResult: String?
 
-                typoCompletion = { results in
-                    taskResults = results
+                typoCompletion = { result in
+                    taskResult = result
                     semaphore.signal()
                 }
 
                 semaphore.wait()
 
-                candidates = taskResults
-                wasCanceled = taskResults == nil
+                candidate = taskResult
+                wasCanceled = false // If we get here, the task completed (not cancelled)
             } else {
                 // No search running - no correction
-                candidates = []
+                candidate = nil
             }
         } else {
             // Word doesn't match current search - no correction
-            candidates = []
+            candidate = nil
         }
 
-        guard let candidates = candidates, !candidates.isEmpty, !wasCanceled else {
+        guard let candidate = candidate, !wasCanceled else {
             return nil
         }
 
-        // Find best candidate: lowest distance, then lowest frequency_rank (higher frequency)
-        let bestCandidate = candidates.min { a, b in
-            a.1 != b.1 ? a.1 < b.1 : a.2 < b.2
-        }
-
-        return bestCandidate.map {
-            applySmartCapitalization(word: $0.0, userPrefix: trimmedWord, userSuffix: "")
-        }
+        return applySmartCapitalization(word: candidate, userPrefix: trimmedWord, userSuffix: "")
     }
 }

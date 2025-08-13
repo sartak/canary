@@ -55,15 +55,13 @@ def hash_string(s: str) -> int:
     return hash_value
 
 
-def generate_deletes(word: str, max_edit_distance: int = 2, prefix_length: int = 7) -> Set[str]:
+def generate_deletes(word: str, max_edit_distance: int = 2) -> Set[str]:
     """Generate all possible deletes for a word up to max_edit_distance."""
     deletes = set()
 
     def generate_deletes_recursive(word: str, edit_distance: int):
         deletes.add(word)
         if edit_distance < max_edit_distance:
-            if len(word) > prefix_length:
-                word = word[:prefix_length]
             for i in range(len(word)):
                 if len(word) > 1:  # Don't delete if it would make empty string
                     delete = word[:i] + word[i+1:]
@@ -85,7 +83,7 @@ def populate_symspell_tables(conn: sqlite3.Connection, filtered_words: List[Tupl
         frequency_rank = i + 1  # Rank based on position in sorted list
 
         # Generate deletes for this word
-        deletes = generate_deletes(word_lower, max_edit_distance=2, prefix_length=7)
+        deletes = generate_deletes(word_lower, max_edit_distance=2)
         for delete in deletes:
             delete_hash = hash_string(delete)
             deletes_data.append((delete_hash, word_lower, frequency_rank, word))
