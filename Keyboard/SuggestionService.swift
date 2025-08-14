@@ -59,23 +59,23 @@ class SuggestionService {
         sqlite3_close(db)
     }
 
-    func updateContext(before: String?, after: String?, selected: String?, autocorrectEnabled: Bool) {
+    func updateContext(before: String?, after: String?, selected: String?, autocorrectEnabled: Bool, shiftState: ShiftState) {
         self.contextBefore = before
         self.contextAfter = after
         self.selectedText = selected
 
         let (prefix, suffix) = extractCurrentWordContext()
 
-        let (typeahead, exactMatch) = updateTypeahead(prefix: prefix, suffix: suffix)
+        let (typeahead, exactMatch) = updateTypeahead(prefix: prefix, suffix: suffix, shiftState: shiftState)
 
         if autocorrectEnabled {
             if let exactMatch = exactMatch {
                 // We have an exact match, do smart capitalization
-                let smartCapitalizedWord = applySmartCapitalization(word: exactMatch, userPrefix: prefix, userSuffix: suffix)
+                let smartCapitalizedWord = applySmartCapitalization(word: exactMatch, userPrefix: prefix, userSuffix: suffix, shiftState: shiftState)
                 autocorrectSuggestion = smartCapitalizedWord != (prefix + suffix) ? smartCapitalizedWord : nil
             } else {
                 // No exact match, proceed with autocorrect
-                autocorrectSuggestion = updateAutocorrect(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
+                autocorrectSuggestion = updateAutocorrect(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled, shiftState: shiftState)
             }
         } else {
             autocorrectSuggestion = nil
@@ -92,7 +92,7 @@ class SuggestionService {
         delegate?.suggestionService(self, didUpdateSuggestions: filteredTypeahead, autocorrect: autocorrectSuggestion)
     }
 
-    private func updateAutocorrect(prefix: String, suffix: String, autocorrectEnabled: Bool = true) -> String? {
+    private func updateAutocorrect(prefix: String, suffix: String, autocorrectEnabled: Bool = true, shiftState: ShiftState) -> String? {
         if prefix.isEmpty || !autocorrectEnabled {
             return nil
         }
@@ -118,7 +118,7 @@ class SuggestionService {
         let duration = (endTime - startTime) * 1000 // Convert to milliseconds
 
         if let correction = correction {
-            let finalCorrection = applySmartCapitalization(word: correction + possessiveSuffix, userPrefix: prefix, userSuffix: "")
+            let finalCorrection = applySmartCapitalization(word: correction + possessiveSuffix, userPrefix: prefix, userSuffix: "", shiftState: shiftState)
             print("AutocorrectService: '\(prefix.lowercased())' -> '\(finalCorrection)' in \(String(format: "%.3f", duration))ms")
             return finalCorrection
         } else {
@@ -127,7 +127,7 @@ class SuggestionService {
         }
     }
 
-    private func updateTypeahead(prefix: String, suffix: String) -> ([(String, [InputAction])], String?) {
+    private func updateTypeahead(prefix: String, suffix: String, shiftState: ShiftState) -> ([(String, [InputAction])], String?) {
         // Handle possessive 's suffix: search for just the word part
         let (searchPrefix, searchSuffix, possessiveSuffix) = if (prefix.hasSuffix("'s") || prefix.hasSuffix("'S")) && prefix.count > 2 {
             (String(prefix.dropLast(2)), suffix, String(prefix.suffix(2)))
@@ -151,7 +151,7 @@ class SuggestionService {
 
         let suggestions = matchingWords.map { word in
             let wordWithPossessive = word + possessiveSuffix
-            let displayWord = applySmartCapitalization(word: wordWithPossessive, userPrefix: prefix, userSuffix: suffix)
+            let displayWord = applySmartCapitalization(word: wordWithPossessive, userPrefix: prefix, userSuffix: suffix, shiftState: shiftState)
             let actions = createInputActions(for: displayWord, prefix: prefix, suffix: suffix, excludeTrailingSpace: false)
             return (displayWord, actions)
         }
@@ -188,12 +188,27 @@ class SuggestionService {
     /// - "us|" + "USA" → "USA" (preserve corpus caps)
     /// - "Us|" + "USA" → "USA" (preserve corpus caps)
     /// - "uS|" + "USA" → "USA" (preserve corpus caps)
-    private func applySmartCapitalization(word: String, userPrefix: String, userSuffix: String) -> String {
+    private func applySmartCapitalization(word: String, userPrefix: String, userSuffix: String, shiftState: ShiftState) -> String {
         let userPattern = userPrefix + userSuffix
 
-        // If user input is all lowercase, preserve corpus capitalization
+        // If caps lock is on, capitalize the entire word unconditionally
+        if shiftState == .capsLock {
+            return word.uppercased()
+        }
+
+        // If user input is all lowercase, check shift state for capitalization
         if userPattern.lowercased() == userPattern {
-            return word
+            switch shiftState {
+            case .shifted:
+                // Auto-shift is active, capitalize first letter only
+                return word.prefix(1).uppercased() + word.dropFirst()
+            case .unshifted:
+                // Keep corpus capitalization
+                return word
+            case .capsLock:
+                // Already handled above
+                return word.uppercased()
+            }
         }
 
         // Apply user's capitalization pattern to the full word

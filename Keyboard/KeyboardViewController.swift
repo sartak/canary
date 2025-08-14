@@ -12,7 +12,9 @@ private let dismissButtonSize: CGFloat = 24
 
 class KeyboardViewController: UIInputViewController {
     private var currentLayer: Layer = .alpha
-    private var currentShiftState: ShiftState = .unshifted
+    private var userShiftState: ShiftState = .unshifted
+    private var appShiftState: ShiftState = .unshifted
+    private var userShiftOverride: Bool = false
     private var keyboardTouchView: KeyboardTouchView!
     private var deviceLayout: DeviceLayout!
     private var heightConstraint: NSLayoutConstraint?
@@ -99,7 +101,7 @@ class KeyboardViewController: UIInputViewController {
 
         keyboardTouchView = KeyboardTouchView()
         keyboardTouchView.backgroundColor = UIColor.clear
-        keyboardTouchView.currentShiftState = currentShiftState
+        keyboardTouchView.shiftState = effectiveShiftState()
         keyboardTouchView.deviceLayout = deviceLayout
         keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
         keyboardTouchView.keyData = createKeyData()
@@ -144,7 +146,7 @@ class KeyboardViewController: UIInputViewController {
 
         // Calculate keyboard height first
         let isShifted: Bool
-        switch currentShiftState {
+        switch effectiveShiftState() {
         case .unshifted:
             isShifted = false
         case .shifted, .capsLock:
@@ -188,7 +190,7 @@ class KeyboardViewController: UIInputViewController {
         var yOffset: CGFloat = deviceLayout.topPadding
 
         let isShifted: Bool
-        switch currentShiftState {
+        switch effectiveShiftState() {
         case .unshifted:
             isShifted = false
         case .shifted, .capsLock:
@@ -299,11 +301,11 @@ class KeyboardViewController: UIInputViewController {
 
         switch doubleTapBehavior {
         case .capsLock:
-            switch currentShiftState {
+            switch userShiftState {
             case .unshifted, .shifted:
-                currentShiftState = .capsLock
+                userShiftState = .capsLock
             case .capsLock:
-                currentShiftState = .unshifted
+                userShiftState = .unshifted
             }
 
             updateKeyboardForShiftChange()
@@ -370,33 +372,81 @@ class KeyboardViewController: UIInputViewController {
         if shouldResetMaybePunctuating {
             resetMaybePunctuating()
         }
+        autoShift()
         refreshSuggestions()
     }
 
+    private func effectiveShiftState() -> ShiftState {
+        return userShiftOverride ? userShiftState : max(appShiftState, userShiftState)
+    }
+
     private func toggleShift() {
-        switch currentShiftState {
-        case .unshifted:
-            currentShiftState = .shifted
-        case .shifted:
-            currentShiftState = .unshifted
-        case .capsLock:
-            currentShiftState = .unshifted
+        if userShiftState == .unshifted && appShiftState != .unshifted {
+            // User is toggling override of app's capitalization preference
+            userShiftOverride.toggle()
+        } else {
+            // Normal shift toggle behavior
+            switch userShiftState {
+            case .unshifted:
+                userShiftState = .shifted
+            case .shifted:
+                userShiftState = .unshifted
+            case .capsLock:
+                userShiftState = .unshifted
+            }
         }
 
         updateKeyboardForShiftChange()
     }
 
     private func autoUnshift() {
-        switch currentShiftState {
+        switch userShiftState {
         case .unshifted:
             break
         case .shifted:
-            currentShiftState = .unshifted
+            userShiftState = .unshifted
             updateKeyboardForShiftChange()
         case .capsLock:
             // Caps lock should not auto-unshift
             break
         }
+
+        // Always reset override after any key press that triggers auto-unshift
+        userShiftOverride = false
+    }
+
+    private func autoShift() {
+        let beforeInput = textDocumentProxy.documentContextBeforeInput ?? ""
+
+        // Update app shift state based on host app's autocapitalization setting
+        switch textDocumentProxy.autocapitalizationType {
+        case .some(.none):
+            appShiftState = .unshifted
+        case .some(.words), .some(.sentences), .some(.allCharacters):
+            if beforeInput.isEmpty {
+                appShiftState = .shifted
+            } else {
+                switch textDocumentProxy.autocapitalizationType {
+                case .some(.words):
+                    // Capitalize after any whitespace
+                    appShiftState = beforeInput.last?.isWhitespace == true ? .shifted : .unshifted
+                case .some(.sentences):
+                    // Capitalize at start and after sentence endings
+                    let sentenceEnders = [". ", "! ", "? ", "\n"]
+                    appShiftState = sentenceEnders.contains { beforeInput.hasSuffix($0) } ? .shifted : .unshifted
+                case .some(.allCharacters):
+                    appShiftState = .capsLock
+                default:
+                    appShiftState = .unshifted
+                }
+            }
+        case .some(_):
+            appShiftState = .unshifted
+        case nil:
+            appShiftState = .unshifted
+        }
+
+        updateKeyboardForShiftChange()
     }
 
     private func switchToLayer(_ layer: Layer) {
@@ -440,7 +490,7 @@ class KeyboardViewController: UIInputViewController {
     private func calculateDismissButtonOffset() -> CGFloat {
         let containerWidth = view.bounds.width
         let isShifted: Bool
-        switch currentShiftState {
+        switch effectiveShiftState() {
         case .unshifted:
             isShifted = false
         case .shifted, .capsLock:
@@ -541,6 +591,7 @@ class KeyboardViewController: UIInputViewController {
 
         suggestionView.setOnTypeaheadTapped { [weak self] actions in
             self?.executeActions(actions)
+            self?.autoShift()
             self?.refreshSuggestions()
         }
 
@@ -561,7 +612,7 @@ class KeyboardViewController: UIInputViewController {
 
         // Align with the left edge of the first column of keys
         let isShifted: Bool
-        switch currentShiftState {
+        switch effectiveShiftState() {
         case .unshifted:
             isShifted = false
         case .shifted, .capsLock:
@@ -589,6 +640,7 @@ class KeyboardViewController: UIInputViewController {
     private func handleTextChange() {
         clearUndo()
         resetMaybePunctuating()
+        autoShift()
         refreshSuggestions()
     }
 
@@ -604,7 +656,7 @@ class KeyboardViewController: UIInputViewController {
             let after = self.textDocumentProxy.documentContextAfterInput
             let selected = self.textDocumentProxy.selectedText
 
-            self.suggestionService.updateContext(before: before, after: after, selected: selected, autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled)
+            self.suggestionService.updateContext(before: before, after: after, selected: selected, autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled, shiftState: effectiveShiftState())
         }
     }
 
@@ -674,8 +726,15 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func updateKeyboardForShiftChange() {
+        let effectiveShiftState = effectiveShiftState()
+
+        // Only update if the effective shift state has actually changed
+        if keyboardTouchView.shiftState == effectiveShiftState {
+            return
+        }
+
         // Update display state and key data - gesture recognizer persists now
-        keyboardTouchView.currentShiftState = currentShiftState
+        keyboardTouchView.shiftState = effectiveShiftState
         keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
         keyboardTouchView.hasUndo = undoActions != nil
         keyboardTouchView.keyData = createKeyData()
@@ -692,7 +751,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func showKeyPopout(for keyData: KeyData) {
-        let popout = KeyPopoutView.createPopout(for: keyData, shiftState: currentShiftState, containerView: view, traitCollection: traitCollection, deviceLayout: deviceLayout)
+        let popout = KeyPopoutView.createPopout(for: keyData, shiftState: effectiveShiftState(), containerView: view, traitCollection: traitCollection, deviceLayout: deviceLayout)
         view.addSubview(popout)
         keyPopouts[keyData.index] = popout
     }

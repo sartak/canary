@@ -7,10 +7,21 @@
 
 import UIKit
 
-enum ShiftState: Equatable {
+enum ShiftState: Equatable, Comparable {
     case unshifted
     case shifted
     case capsLock
+
+    static func < (lhs: ShiftState, rhs: ShiftState) -> Bool {
+        switch (lhs, rhs) {
+        case (.unshifted, .shifted), (.unshifted, .capsLock):
+            return true
+        case (.shifted, .capsLock):
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 enum RepeatingBehavior: Equatable {

@@ -15,7 +15,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             gestureRecognizer?.keyData = keyData
         }
     }
-    var currentShiftState: ShiftState = .unshifted
+    var shiftState: ShiftState = .unshifted
     var deviceLayout: DeviceLayout!
     var autocorrectEnabled: Bool = true
     var hasUndo: Bool = false
@@ -217,7 +217,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
 
             // Draw rounded key background
             let path = UIBezierPath(roundedRect: key.frame, cornerRadius: deviceLayout.cornerRadius)
-            let color = key.key.backgroundColor(shiftState: currentShiftState, traitCollection: self.traitCollection, tapped: isPressed, isLargeScreen: isLargeScreen)
+            let color = key.key.backgroundColor(shiftState: shiftState, traitCollection: self.traitCollection, tapped: isPressed, isLargeScreen: isLargeScreen)
             color.setFill()
             path.fill()
 
@@ -229,7 +229,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
                 // Try to render SF Symbol first
                 if let symbolView = SFSymbolRenderer.render(
                     for: key.key,
-                    shiftState: currentShiftState,
+                    shiftState: shiftState,
                     fontSize: fontSize,
                     theme: theme,
                     pressed: isPressed,
@@ -256,7 +256,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
     }
 
     private func drawKeyText(for key: KeyData, theme: ColorTheme) {
-        let text = key.key.label(shiftState: currentShiftState)
+        let text = key.key.label(shiftState: shiftState)
         if !text.isEmpty {
             let fontSize = key.key.fontSize(deviceLayout: deviceLayout)
             let font = UIFont.systemFont(ofSize: fontSize)
