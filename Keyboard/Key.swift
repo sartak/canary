@@ -88,35 +88,69 @@ struct Key {
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocompleteWordDisabled: Bool = false, toggleAutocompleteWord: @escaping () -> Void = {}, executeActions: @escaping ([InputAction]) -> Void) {
+    static func applyAutocorrectWithTrigger(text: String, to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, autocompleteWordDisabled: Bool, toggleAutocompleteWord: @escaping () -> Void, executeActions: @escaping ([InputAction]) -> Void) {
+        if autocompleteWordDisabled {
+            toggleAutocompleteWord()
+            textDocumentProxy.insertText(text)
+        } else {
+            if let autocorrectActions = suggestionService.autocorrectActions {
+                // Combine autocorrect actions with triggering character insertion
+                var combinedActions = autocorrectActions
+                combinedActions.append(.insert(text))
+                executeActions(combinedActions)
+            } else {
+                // No autocorrect, just insert the character
+                textDocumentProxy.insertText(text)
+            }
+        }
+    }
+
+    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocompleteWordDisabled: Bool = false, toggleAutocompleteWord: @escaping () -> Void = {}, executeActions: @escaping ([InputAction]) -> Void, undoActions: [InputAction]?, clearUndo: @escaping () -> Void) {
+        // Clear undo state before handling any key (except when backspace uses undo)
+        if case .backspace = keyType, undoActions != nil {
+            // Don't clear undo yet - backspace will use it
+        } else {
+            clearUndo()
+        }
+
         // Handle the key action
         switch keyType {
         case .simple(let text):
-            // Check if this character should trigger autocorrect
-            if Key.shouldTriggerAutocorrect(text) {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
-            }
-
-            // Handle spacing for punctuation
+            // Handle spacing for punctuation first
             if Key.shouldUnspacePunctuation(text) {
                 if maybePunctuating {
                     textDocumentProxy.deleteBackward()
                 }
                 let trailingSpace = (maybePunctuating && Key.shouldAddTrailingSpaceAfterPunctuation(text)) ? " " : ""
-                textDocumentProxy.insertText(text + trailingSpace)
+                let fullText = text + trailingSpace
+
+                // Check if this character should trigger autocorrect
+                if Key.shouldTriggerAutocorrect(text) {
+                    Key.applyAutocorrectWithTrigger(text: fullText, to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
+                } else {
+                    textDocumentProxy.insertText(fullText)
+                }
             } else {
-                textDocumentProxy.insertText(text)
+                // Check if this character should trigger autocorrect
+                if Key.shouldTriggerAutocorrect(text) {
+                    Key.applyAutocorrectWithTrigger(text: text, to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
+                } else {
+                    textDocumentProxy.insertText(text)
+                }
             }
         case .backspace:
-            textDocumentProxy.deleteBackward()
+            if let undoActions = undoActions {
+                executeActions(undoActions)
+                clearUndo()
+            } else {
+                textDocumentProxy.deleteBackward()
+            }
         case .shift:
             shiftHandler()
         case .enter:
-            Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
-            textDocumentProxy.insertText("\n")
+            Key.applyAutocorrectWithTrigger(text: "\n", to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
         case .space:
-            Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
-            textDocumentProxy.insertText(" ")
+            Key.applyAutocorrectWithTrigger(text: " ", to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
         case .layerSwitch(let layer):
             layerSwitchHandler(layer)
         case .layoutSwitch(let layout):
@@ -141,7 +175,7 @@ struct Key {
         }
     }
 
-    func sfSymbolName(shiftState: ShiftState = .unshifted, pressed: Bool = false, autocorrectEnabled: Bool = true) -> String? {
+    func sfSymbolName(shiftState: ShiftState = .unshifted, pressed: Bool = false, autocorrectEnabled: Bool = true, hasUndo: Bool = false) -> String? {
         switch keyType {
         case .globe:
             return "globe"
@@ -155,7 +189,11 @@ struct Key {
                 return "capslock.fill"
             }
         case .backspace:
-            return pressed ? "delete.backward.fill" : "delete.backward"
+            if hasUndo {
+                return "arrow.uturn.backward"
+            } else {
+                return pressed ? "delete.backward.fill" : "delete.backward"
+            }
         case .configuration(let config):
             switch config {
             case .toggleAutocorrect:

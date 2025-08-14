@@ -18,6 +18,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
     var currentShiftState: ShiftState = .unshifted
     var deviceLayout: DeviceLayout!
     var autocorrectEnabled: Bool = true
+    var hasUndo: Bool = false
     var keysWithPopouts: Set<Int> = []
     var onKeyTouchDown: ((KeyData) -> Void)? {
         didSet {
@@ -232,7 +233,8 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
                     fontSize: fontSize,
                     theme: theme,
                     pressed: isPressed,
-                    autocorrectEnabled: autocorrectEnabled
+                    autocorrectEnabled: autocorrectEnabled,
+                    hasUndo: key.key.keyType == .backspace ? hasUndo : false
                 ) as? UIImageView {
                     // Draw SF Symbol
                     let symbolImage = symbolView.image!

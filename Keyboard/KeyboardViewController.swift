@@ -30,6 +30,7 @@ class KeyboardViewController: UIInputViewController {
     private var autocorrectAppDisabled = false
     private var autocorrectUserDisabled = false
     private var autocompleteWordDisabled = false
+    private var undoActions: [InputAction]?
 
     // Expose autocorrect state for testing/debugging
     var isAutocorrectEnabled: Bool {
@@ -355,6 +356,10 @@ class KeyboardViewController: UIInputViewController {
                               },
                               executeActions: { [weak self] actions in
                                   self?.executeActions(actions)
+                              },
+                              undoActions: undoActions,
+                              clearUndo: { [weak self] in
+                                  self?.clearUndo()
                               })
 
         // Provide haptic feedback for each repeat
@@ -575,7 +580,14 @@ class KeyboardViewController: UIInputViewController {
         maybePunctuating = false
     }
 
+    private func clearUndo() {
+        undoActions = nil
+        keyboardTouchView?.hasUndo = false
+        keyboardTouchView?.setNeedsDisplay()
+    }
+
     private func handleTextChange() {
+        clearUndo()
         resetMaybePunctuating()
         refreshSuggestions()
     }
@@ -597,11 +609,19 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func executeActions(_ actions: [InputAction]) {
+        var buildingUndoActions: [InputAction] = []
+
+        buildingUndoActions.append(.maybePunctuating(maybePunctuating))
+
         for action in actions {
             switch action {
             case .insert(let text):
+                for _ in 0..<text.count {
+                    buildingUndoActions.append(.deleteBackward)
+                }
                 textDocumentProxy.insertText(text)
             case .moveCursor(let offset):
+                buildingUndoActions.append(.moveCursor(-offset))
                 if offset > 0 {
                     for _ in 0..<offset {
                         textDocumentProxy.adjustTextPosition(byCharacterOffset: 1)
@@ -612,11 +632,21 @@ class KeyboardViewController: UIInputViewController {
                     }
                 }
             case .maybePunctuating(let value):
+                // Don't add undo action here - we captured initial state above
                 maybePunctuating = value
             case .deleteBackward:
+                if let before = textDocumentProxy.documentContextBeforeInput, !before.isEmpty {
+                    let deletedChar = String(before.last!)
+                    buildingUndoActions.append(.insert(deletedChar))
+                }
                 textDocumentProxy.deleteBackward()
             }
         }
+
+        undoActions = Array(buildingUndoActions.reversed())
+
+        keyboardTouchView?.hasUndo = true
+        keyboardTouchView?.setNeedsDisplay()
     }
 
     @objc private func handleCutButton() {
@@ -647,6 +677,7 @@ class KeyboardViewController: UIInputViewController {
         // Update display state and key data - gesture recognizer persists now
         keyboardTouchView.currentShiftState = currentShiftState
         keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
+        keyboardTouchView.hasUndo = undoActions != nil
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
     }
