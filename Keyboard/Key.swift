@@ -119,22 +119,19 @@ struct Key {
         textDocumentProxy.insertText(newWord)
     }
 
-    static func applyAutocorrectWithVisual(to textDocumentProxy: UITextDocumentProxy, at position: CGPoint, using suggestionService: SuggestionService, visualHandler: @escaping (String, String, CGPoint) -> Void) {
-        if let correctedWord = suggestionService.currentCorrection,
-           let wordInfo = getCurrentWord(from: textDocumentProxy) {
-            visualHandler(wordInfo.word, correctedWord, position)
+    static func applyAutocorrect(to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService) {
+        if let correctedWord = suggestionService.currentCorrection {
             replaceCurrentWord(in: textDocumentProxy, with: correctedWord)
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, autocorrectVisualHandler: @escaping (String, String, CGPoint) -> Void = { _, _, _ in }) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
             // Check if this character should trigger autocorrect
             if autocorrectEnabled && Key.shouldTriggerAutocorrect(text) {
-                // Apply autocorrect with visual feedback
-                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: suggestionService, visualHandler: autocorrectVisualHandler)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService)
             }
 
             // Handle spacing for punctuation
@@ -152,15 +149,13 @@ struct Key {
         case .shift:
             shiftHandler()
         case .enter:
-            // Apply autocorrect with visual feedback before line break
             if autocorrectEnabled {
-                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: suggestionService, visualHandler: autocorrectVisualHandler)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService)
             }
             textDocumentProxy.insertText("\n")
         case .space:
-            // Apply autocorrect with visual feedback before inserting space
             if autocorrectEnabled {
-                Key.applyAutocorrectWithVisual(to: textDocumentProxy, at: CGPoint(x: 0, y: 0), using: suggestionService, visualHandler: autocorrectVisualHandler)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService)
             }
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):

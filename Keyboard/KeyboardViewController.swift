@@ -348,10 +348,7 @@ class KeyboardViewController: UIInputViewController {
                                   self?.handleConfiguration(config)
                               },
                               maybePunctuating: maybePunctuating,
-                              autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled,
-                              autocorrectVisualHandler: { [weak self] originalWord, correctedWord, _ in
-                                  self?.showAutocorrectFeedback(from: originalWord, to: correctedWord, for: keyData)
-                              })
+                              autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled)
 
         // Provide haptic feedback for each repeat
         HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
@@ -670,23 +667,6 @@ class KeyboardViewController: UIInputViewController {
         keyPopouts.removeValue(forKey: keyData.index)
     }
 
-    private func showAutocorrectFeedback(from originalWord: String, to correctedWord: String, for keyData: KeyData) {
-        // Calculate position above the key that triggered the autocorrect
-        let keyCenter = CGPoint(
-            x: keyData.frame.midX,
-            y: keyData.frame.midY
-        )
-
-        // Show the autocorrect popout
-        AutocorrectPopoutView.showAutocorrection(
-            from: originalWord,
-            to: correctedWord,
-            at: keyCenter,
-            in: view,
-            deviceLayout: deviceLayout,
-            traitCollection: traitCollection
-        )
-    }
 
 
     // MARK: - UITextInputDelegate
