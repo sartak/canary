@@ -59,7 +59,7 @@ class SuggestionService {
         sqlite3_close(db)
     }
 
-    func updateContext(before: String?, after: String?, selected: String?, autocorrectEnabled: Bool = true) {
+    func updateContext(before: String?, after: String?, selected: String?, autocorrectEnabled: Bool) {
         self.contextBefore = before
         self.contextAfter = after
         self.selectedText = selected
@@ -68,13 +68,17 @@ class SuggestionService {
 
         let (typeahead, exactMatch) = updateTypeahead(prefix: prefix, suffix: suffix)
 
-        if let exactMatch = exactMatch {
-            // We have an exact match, do smart capitalization directly
-            let smartCapitalizedWord = applySmartCapitalization(word: exactMatch, userPrefix: prefix, userSuffix: suffix)
-            autocorrectSuggestion = smartCapitalizedWord != (prefix + suffix) ? smartCapitalizedWord : nil
+        if autocorrectEnabled {
+            if let exactMatch = exactMatch {
+                // We have an exact match, do smart capitalization
+                let smartCapitalizedWord = applySmartCapitalization(word: exactMatch, userPrefix: prefix, userSuffix: suffix)
+                autocorrectSuggestion = smartCapitalizedWord != (prefix + suffix) ? smartCapitalizedWord : nil
+            } else {
+                // No exact match, proceed with autocorrect
+                autocorrectSuggestion = updateAutocorrect(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
+            }
         } else {
-            // No exact match, proceed with autocorrect
-            autocorrectSuggestion = updateAutocorrect(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
+            autocorrectSuggestion = nil
         }
 
         autocorrectActions = autocorrectSuggestion != nil ? createInputActions(for: autocorrectSuggestion!, prefix: prefix, suffix: suffix, excludeTrailingSpace: true) : nil

@@ -349,7 +349,6 @@ class KeyboardViewController: UIInputViewController {
                                   self?.handleConfiguration(config)
                               },
                               maybePunctuating: maybePunctuating,
-                              autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled,
                               autocompleteWordDisabled: autocompleteWordDisabled,
                               toggleAutocompleteWord: { [weak self] in
                                   self?.toggleAutocompleteWord()

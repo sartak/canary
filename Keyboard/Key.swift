@@ -88,12 +88,12 @@ struct Key {
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, autocompleteWordDisabled: Bool = false, toggleAutocompleteWord: @escaping () -> Void = {}, executeActions: @escaping ([InputAction]) -> Void) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocompleteWordDisabled: Bool = false, toggleAutocompleteWord: @escaping () -> Void = {}, executeActions: @escaping ([InputAction]) -> Void) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
             // Check if this character should trigger autocorrect
-            if autocorrectEnabled && Key.shouldTriggerAutocorrect(text) {
+            if Key.shouldTriggerAutocorrect(text) {
                 Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
             }
 
@@ -112,14 +112,10 @@ struct Key {
         case .shift:
             shiftHandler()
         case .enter:
-            if autocorrectEnabled {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
-            }
+            Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
             textDocumentProxy.insertText("\n")
         case .space:
-            if autocorrectEnabled {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
-            }
+            Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):
             layerSwitchHandler(layer)
