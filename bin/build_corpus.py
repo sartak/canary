@@ -72,7 +72,7 @@ def generate_deletes(word: str, max_edit_distance: int = 2) -> Set[str]:
     return deletes
 
 
-def populate_symspell_tables(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]]):
+def populate_symspell_tables(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
     """Populate SymSpell tables with deletes pointing to main words table."""
     print("Building SymSpell dictionary...")
 
@@ -80,6 +80,11 @@ def populate_symspell_tables(conn: sqlite3.Connection, filtered_words: List[Tupl
 
     for i, (word, original_rank) in enumerate(filtered_words):
         word_lower = word.lower()
+
+        # Skip hidden words - they should never appear in autocorrect suggestions
+        if word_lower in hidden_words:
+            continue
+
         frequency_rank = i + 1  # Rank based on position in sorted list
 
         # Generate deletes for this word
@@ -258,7 +263,7 @@ def build_filtered_corpus():
         create_database_tables(conn)
         populate_database(conn, filtered_words, hidden_words)
         populate_prefixes_table(conn, filtered_words, hidden_words)
-        populate_symspell_tables(conn, filtered_words)
+        populate_symspell_tables(conn, filtered_words, hidden_words)
 
     finally:
         conn.close()
