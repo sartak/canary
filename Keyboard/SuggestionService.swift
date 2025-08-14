@@ -97,23 +97,30 @@ class SuggestionService {
             return nil
         }
 
+        // Handle possessive 's suffix: autocorrect just the word part, then append 's
+        let (wordToCorrect, possessiveSuffix) = if (prefix.hasSuffix("'s") || prefix.hasSuffix("'S")) && prefix.count > 2 {
+            (String(prefix.dropLast(2)), String(prefix.suffix(2)))
+        } else {
+            (prefix, "")
+        }
+
         // Skip correction for strings containing invalid characters
         // Only allow words composed entirely of valid word characters
-        if !prefix.indices.allSatisfy({ index in
-            Self.isWordCharacter(in: prefix, at: index)
+        if !wordToCorrect.indices.allSatisfy({ index in
+            Self.isWordCharacter(in: wordToCorrect, at: index)
         }) {
             return nil
         }
 
         let startTime = CFAbsoluteTimeGetCurrent()
-        let correction = autocorrectService.findBestCorrection(for: prefix.lowercased(), maxDistance: 2)
+        let correction = autocorrectService.findBestCorrection(for: wordToCorrect.lowercased(), maxDistance: 2)
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000 // Convert to milliseconds
 
         if let correction = correction {
-            let correction = applySmartCapitalization(word: correction, userPrefix: prefix, userSuffix: "")
-            print("AutocorrectService: '\(prefix.lowercased())' -> '\(correction)' in \(String(format: "%.3f", duration))ms")
-            return correction
+            let finalCorrection = applySmartCapitalization(word: correction + possessiveSuffix, userPrefix: prefix, userSuffix: "")
+            print("AutocorrectService: '\(prefix.lowercased())' -> '\(finalCorrection)' in \(String(format: "%.3f", duration))ms")
+            return finalCorrection
         } else {
             print("AutocorrectService: '\(prefix.lowercased())' -> no correction in \(String(format: "%.3f", duration))ms")
             return nil
@@ -121,27 +128,36 @@ class SuggestionService {
     }
 
     private func updateTypeahead(prefix: String, suffix: String) -> ([(String, [InputAction])], String?) {
-        let prefixLower = prefix.lowercased()
-        let suffixLower = suffix.lowercased()
+        // Handle possessive 's suffix: search for just the word part
+        let (searchPrefix, searchSuffix, possessiveSuffix) = if (prefix.hasSuffix("'s") || prefix.hasSuffix("'S")) && prefix.count > 2 {
+            (String(prefix.dropLast(2)), suffix, String(prefix.suffix(2)))
+        } else {
+            (prefix, suffix, "")
+        }
+
+        let prefixLower = searchPrefix.lowercased()
+        let suffixLower = searchSuffix.lowercased()
 
         let startTime = CFAbsoluteTimeGetCurrent()
         let (matchingWords, exactMatch) = typeaheadService.getCompletions(prefix: prefixLower, suffix: suffixLower)
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000 // Convert to milliseconds
 
-        if suffix.isEmpty {
+        if searchSuffix.isEmpty {
             print("TypeaheadService: '\(prefixLower)' -> \(matchingWords.count) completions in \(String(format: "%.3f", duration))ms")
         } else {
             print("TypeaheadService: '\(prefixLower)|\(suffixLower)' -> \(matchingWords.count) completions in \(String(format: "%.3f", duration))ms")
         }
 
         let suggestions = matchingWords.map { word in
-            let displayWord = applySmartCapitalization(word: word, userPrefix: prefix, userSuffix: suffix)
+            let wordWithPossessive = word + possessiveSuffix
+            let displayWord = applySmartCapitalization(word: wordWithPossessive, userPrefix: prefix, userSuffix: suffix)
             let actions = createInputActions(for: displayWord, prefix: prefix, suffix: suffix, excludeTrailingSpace: false)
             return (displayWord, actions)
         }
 
-        return (suggestions, exactMatch)
+        let finalExactMatch = exactMatch.map { $0 + possessiveSuffix }
+        return (suggestions, finalExactMatch)
     }
 
     /// Applies smart capitalization rules based on user input patterns
@@ -203,10 +219,11 @@ class SuggestionService {
         }
 
         // If pattern is shorter than word, preserve remaining corpus capitalization
-        // If user pattern shows "all caps intent" (multiple consecutive capitals), apply to whole word
+        // If user pattern shows "all caps intent" (no lowercase letters and multiple letters), apply to whole word
         if patternLength < wordLength {
-            let userCapitals = userPattern.filter { $0.isUppercase }.count
-            let isAllCapsIntent = userCapitals == patternLength && userCapitals > 1
+            let hasLowercase = userPattern.contains { $0.isLowercase }
+            let hasMultipleLetters = userPattern.filter { $0.isLetter }.count > 1
+            let isAllCapsIntent = !hasLowercase && hasMultipleLetters
 
             if isAllCapsIntent {
                 result = result.uppercased()

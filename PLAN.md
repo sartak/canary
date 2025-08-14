@@ -85,7 +85,7 @@
 - [x] Add enhanced auto-correction with prediction integration
 - [x] Display autocorrect term in suggestions bar
 - [x] Opting out of an autocorrect by tapping on the suggestions bar preview
-- [ ] Improve autocorrect of "foo's" to autocorrect "foo" then append "'s"
+- [x] Improve autocorrect of "foo's" to autocorrect "foo" then append "'s"
 
 ### Context-Aware Tuning
 - [ ] Implement smart backspace (context-aware undo)
