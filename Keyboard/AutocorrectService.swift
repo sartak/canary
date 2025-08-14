@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 import simd
 
-class TypoService {
+class AutocorrectService {
     private let db: OpaquePointer
 
     // Cache for batch queries by placeholder count

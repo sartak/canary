@@ -21,10 +21,10 @@ class SuggestionService {
 
     private var typeaheadService: TypeaheadService
 
-    private var typoService: TypoService
+    private var autocorrectService: AutocorrectService
     private let db: OpaquePointer
-    var typoSuggestion: String?
-    var typoActions: [InputAction]?
+    var autocorrectSuggestion: String?
+    var autocorrectActions: [InputAction]?
 
     init?() {
         guard let path = Bundle(for: SuggestionService.self).path(forResource: "words", ofType: "db") else {
@@ -45,13 +45,13 @@ class SuggestionService {
         }
         self.db = db
 
-        let typoService = TypoService(db: db)
+        let autocorrectService = AutocorrectService(db: db)
         guard let typeaheadService = TypeaheadService(db: db) else {
             sqlite3_close(db)
             return nil
         }
 
-        self.typoService = typoService
+        self.autocorrectService = autocorrectService
         self.typeaheadService = typeaheadService
     }
 
@@ -71,24 +71,24 @@ class SuggestionService {
         if let exactMatch = exactMatch {
             // We have an exact match, do smart capitalization directly
             let smartCapitalizedWord = applySmartCapitalization(word: exactMatch, userPrefix: prefix, userSuffix: suffix)
-            typoSuggestion = smartCapitalizedWord != (prefix + suffix) ? smartCapitalizedWord : nil
+            autocorrectSuggestion = smartCapitalizedWord != (prefix + suffix) ? smartCapitalizedWord : nil
         } else {
-            // No exact match, proceed with typo correction
-            typoSuggestion = updateTypoCorrection(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
+            // No exact match, proceed with autocorrect
+            autocorrectSuggestion = updateAutocorrect(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
         }
 
-        typoActions = typoSuggestion != nil ? createInputActions(for: typoSuggestion!, prefix: prefix, suffix: suffix, excludeTrailingSpace: true) : nil
+        autocorrectActions = autocorrectSuggestion != nil ? createInputActions(for: autocorrectSuggestion!, prefix: prefix, suffix: suffix, excludeTrailingSpace: true) : nil
 
-        let filteredTypeahead = if let correction = typoSuggestion {
+        let filteredTypeahead = if let correction = autocorrectSuggestion {
             typeahead.filter { $0.0 != correction }
         } else {
             typeahead
         }
 
-        delegate?.suggestionService(self, didUpdateSuggestions: filteredTypeahead, autocorrect: typoSuggestion)
+        delegate?.suggestionService(self, didUpdateSuggestions: filteredTypeahead, autocorrect: autocorrectSuggestion)
     }
 
-    private func updateTypoCorrection(prefix: String, suffix: String, autocorrectEnabled: Bool = true) -> String? {
+    private func updateAutocorrect(prefix: String, suffix: String, autocorrectEnabled: Bool = true) -> String? {
         if prefix.isEmpty || !autocorrectEnabled {
             return nil
         }
@@ -102,16 +102,16 @@ class SuggestionService {
         }
 
         let startTime = CFAbsoluteTimeGetCurrent()
-        let correction = typoService.findBestCorrection(for: prefix.lowercased(), maxDistance: 2)
+        let correction = autocorrectService.findBestCorrection(for: prefix.lowercased(), maxDistance: 2)
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000 // Convert to milliseconds
 
         if let correction = correction {
             let correction = applySmartCapitalization(word: correction, userPrefix: prefix, userSuffix: "")
-            print("TypoService: '\(prefix.lowercased())' -> '\(correction)' in \(String(format: "%.3f", duration))ms")
+            print("AutocorrectService: '\(prefix.lowercased())' -> '\(correction)' in \(String(format: "%.3f", duration))ms")
             return correction
         } else {
-            print("TypoService: '\(prefix.lowercased())' -> no correction in \(String(format: "%.3f", duration))ms")
+            print("AutocorrectService: '\(prefix.lowercased())' -> no correction in \(String(format: "%.3f", duration))ms")
             return nil
         }
     }

@@ -6,7 +6,7 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
     private var typeaheads: [(String, [InputAction])] = []
     private var onTypeaheadTapped: (([InputAction]) -> Void)?
 
-    private var typoCorrection: String?
+    private var autocorrectWord: String?
 
     private var scrollView: UIScrollView!
 
@@ -72,7 +72,7 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         onTypeaheadTapped?(actions)
     }
 
-    @objc private func typoCorrectionButtonTapped(_ sender: UIButton) {
+    @objc private func autocorrectButtonTapped(_ sender: UIButton) {
     }
 
     private func layoutSuggestions() {
@@ -89,9 +89,9 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
 
         let theme = ColorTheme.current(for: traitCollection)
 
-        // Create typo correction button first if available
-        if let correction = typoCorrection {
-            let button = createButton(title: correction, textColor: theme.autocorrectColor, target: #selector(typoCorrectionButtonTapped), leftPadding: 0, rightPadding: deviceLayout.suggestionGap, x: currentX, y: buttonY, height: buttonHeight)
+        // Create autocorrect button first if available
+        if let correction = autocorrectWord {
+            let button = createButton(title: correction, textColor: theme.autocorrectColor, target: #selector(autocorrectButtonTapped), leftPadding: 0, rightPadding: deviceLayout.suggestionGap, x: currentX, y: buttonY, height: buttonHeight)
             scrollView.addSubview(button)
             currentX += button.frame.width
             buttons.append(button)
@@ -133,7 +133,7 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
 
     func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?) {
         self.typeaheads = typeahead
-        self.typoCorrection = autocorrect
+        self.autocorrectWord = autocorrect
         layoutSuggestions()
     }
 }

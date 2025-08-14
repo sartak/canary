@@ -79,7 +79,7 @@ struct Key {
     }
 
     static func applyAutocorrect(to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, executeActions: @escaping ([InputAction]) -> Void) {
-        if let actions = suggestionService.typoActions {
+        if let actions = suggestionService.autocorrectActions {
             executeActions(actions)
         }
     }
