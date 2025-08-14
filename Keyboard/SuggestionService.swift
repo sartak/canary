@@ -9,6 +9,7 @@ enum InputAction {
     case insert(String)
     case moveCursor(Int)  // positive = forward, negative = backward
     case maybePunctuating(Bool)
+    case deleteBackward
 }
 
 class SuggestionService {
@@ -22,7 +23,8 @@ class SuggestionService {
 
     private var typoService: TypoService
     private let db: OpaquePointer
-    var currentCorrection: String?
+    var typoSuggestion: String?
+    var typoActions: [InputAction]?
 
     init?() {
         guard let path = Bundle(for: SuggestionService.self).path(forResource: "words", ofType: "db") else {
@@ -69,19 +71,21 @@ class SuggestionService {
         if let exactMatch = exactMatch {
             // We have an exact match, do smart capitalization directly
             let smartCapitalizedWord = applySmartCapitalization(word: exactMatch, userPrefix: prefix, userSuffix: suffix)
-            currentCorrection = smartCapitalizedWord != (prefix + suffix) ? smartCapitalizedWord : nil
+            typoSuggestion = smartCapitalizedWord != (prefix + suffix) ? smartCapitalizedWord : nil
         } else {
             // No exact match, proceed with typo correction
-            currentCorrection = updateTypoCorrection(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
+            typoSuggestion = updateTypoCorrection(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
         }
 
-        let filteredTypeahead = if let correction = currentCorrection {
+        typoActions = typoSuggestion != nil ? createInputActions(for: typoSuggestion!, prefix: prefix, suffix: suffix, excludeTrailingSpace: true) : nil
+
+        let filteredTypeahead = if let correction = typoSuggestion {
             typeahead.filter { $0.0 != correction }
         } else {
             typeahead
         }
 
-        delegate?.suggestionService(self, didUpdateSuggestions: filteredTypeahead, autocorrect: currentCorrection)
+        delegate?.suggestionService(self, didUpdateSuggestions: filteredTypeahead, autocorrect: typoSuggestion)
     }
 
     private func updateTypoCorrection(prefix: String, suffix: String, autocorrectEnabled: Bool = true) -> String? {
@@ -129,38 +133,8 @@ class SuggestionService {
 
         let suggestions = matchingWords.map { word in
             let displayWord = applySmartCapitalization(word: word, userPrefix: prefix, userSuffix: suffix)
-
-            if !prefix.isEmpty && !suffix.isEmpty {
-                // Insert middle part, move cursor past suffix, add space if at end
-                let startIndex = displayWord.index(displayWord.startIndex, offsetBy: prefix.count)
-                let endIndex = displayWord.index(displayWord.endIndex, offsetBy: -suffix.count)
-                let insertText = String(displayWord[startIndex..<endIndex])
-                var actions: [InputAction] = [.insert(insertText), .moveCursor(suffix.count)]
-
-                // Check if we're at the very end of the document
-                if let after = contextAfter, after.dropFirst(suffix.count).isEmpty {
-                    actions.append(.insert(" "))
-                    actions.append(.maybePunctuating(true))
-                }
-
-                return (displayWord, actions)
-            } else if !prefix.isEmpty {
-                // Remove prefix, add trailing space if no suffix
-                let needsTrailingSpace = suffix.isEmpty
-                let insertText = String(displayWord.dropFirst(prefix.count)) + (needsTrailingSpace ? " " : "")
-                let actions: [InputAction] = needsTrailingSpace ? [.insert(insertText), .maybePunctuating(true)] : [.insert(insertText)]
-                return (displayWord, actions)
-            } else if !suffix.isEmpty {
-                // Remove suffix
-                let insertText = String(displayWord.dropLast(suffix.count))
-                return (displayWord, [.insert(insertText)])
-            } else {
-                // No prefix/suffix to remove - check spacing
-                let needsLeadingSpace = shouldAddLeadingSpace()
-                let baseWord = applySmartCapitalization(word: word, userPrefix: prefix, userSuffix: suffix)
-                let insertText = (needsLeadingSpace ? " " + baseWord : baseWord) + " "
-                return (displayWord, [.insert(insertText), .maybePunctuating(true)])
-            }
+            let actions = createInputActions(for: displayWord, prefix: prefix, suffix: suffix, excludeTrailingSpace: false)
+            return (displayWord, actions)
         }
 
         return (suggestions, exactMatch)
@@ -301,5 +275,68 @@ class SuggestionService {
         }
 
         return (prefix, suffix)
+    }
+
+    private func createInputActions(for word: String, prefix: String, suffix: String, excludeTrailingSpace: Bool) -> [InputAction] {
+        var actions: [InputAction] = []
+        var addTrailingSpace = !excludeTrailingSpace
+
+        // Find remaining part of word after matching prefix
+        var remainingWord = word
+
+        if !prefix.isEmpty {
+            let wordChars = Array(word)
+            let prefixChars = Array(prefix)
+            let minLength = min(wordChars.count, prefixChars.count)
+            var matchingPrefixLength = 0
+
+            for i in 0..<minLength {
+                if wordChars[i] == prefixChars[i] {
+                    matchingPrefixLength += 1
+                } else {
+                    break
+                }
+            }
+
+            // Delete the mismatched part of the prefix
+            let charsToDelete = prefix.count - matchingPrefixLength
+            for _ in 0..<charsToDelete {
+                actions.append(.deleteBackward)
+            }
+
+            remainingWord = String(word.dropFirst(matchingPrefixLength))
+        }
+
+        if !remainingWord.isEmpty && !suffix.isEmpty {
+            let insertText = String(remainingWord.dropLast(suffix.count))
+            actions.append(.insert(insertText))
+
+            // Move cursor past suffix
+            actions.append(.moveCursor(suffix.count))
+
+            // Check if we're at the very end of the document
+            if let after = contextAfter, after.dropFirst(suffix.count).isEmpty {
+            } else {
+                addTrailingSpace = false
+            }
+        } else if !remainingWord.isEmpty {
+            actions.append(.insert(remainingWord))
+        } else if !suffix.isEmpty {
+            let insertText = String(remainingWord.dropLast(suffix.count))
+            actions.append(.insert(insertText))
+            addTrailingSpace = false
+        } else {
+            if shouldAddLeadingSpace() {
+                actions.append(.insert(" "))
+            }
+            actions.append(.insert(remainingWord))
+        }
+
+        if addTrailingSpace {
+            actions.append(.insert(" "))
+            actions.append(.maybePunctuating(true))
+        }
+
+        return actions
     }
 }

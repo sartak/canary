@@ -78,60 +78,19 @@ struct Key {
         return text.count == 1 && autocorrectTriggers.contains(text.first!)
     }
 
-    static func getCurrentWord(from textDocumentProxy: UITextDocumentProxy) -> (word: String, range: NSRange)? {
-        guard let beforeInput = textDocumentProxy.documentContextBeforeInput else {
-            return nil
-        }
-
-        // Find the start of the current word by looking backward from cursor
-        var wordStart = beforeInput.count
-        for (index, _) in beforeInput.reversed().enumerated() {
-            let currentIndex = beforeInput.index(beforeInput.endIndex, offsetBy: -(index + 1))
-            if !SuggestionService.isWordCharacter(in: beforeInput, at: currentIndex) {
-                wordStart = beforeInput.count - index
-                break
-            }
-            if index == beforeInput.count - 1 {
-                wordStart = 0
-            }
-        }
-
-        // Extract the current word
-        let wordStartIndex = beforeInput.index(beforeInput.startIndex, offsetBy: wordStart)
-        let currentWord = String(beforeInput[wordStartIndex...])
-
-        if currentWord.isEmpty {
-            return nil
-        }
-
-        return (word: currentWord, range: NSRange(location: wordStart, length: currentWord.count))
-    }
-
-    static func replaceCurrentWord(in textDocumentProxy: UITextDocumentProxy, with newWord: String) {
-        guard let wordInfo = getCurrentWord(from: textDocumentProxy) else { return }
-
-        // Delete the current word
-        for _ in 0..<wordInfo.word.count {
-            textDocumentProxy.deleteBackward()
-        }
-
-        // Insert the corrected word
-        textDocumentProxy.insertText(newWord)
-    }
-
-    static func applyAutocorrect(to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService) {
-        if let correctedWord = suggestionService.currentCorrection {
-            replaceCurrentWord(in: textDocumentProxy, with: correctedWord)
+    static func applyAutocorrect(to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, executeActions: @escaping ([InputAction]) -> Void) {
+        if let actions = suggestionService.typoActions {
+            executeActions(actions)
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, executeActions: @escaping ([InputAction]) -> Void) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
             // Check if this character should trigger autocorrect
             if autocorrectEnabled && Key.shouldTriggerAutocorrect(text) {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, executeActions: executeActions)
             }
 
             // Handle spacing for punctuation
@@ -150,12 +109,12 @@ struct Key {
             shiftHandler()
         case .enter:
             if autocorrectEnabled {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, executeActions: executeActions)
             }
             textDocumentProxy.insertText("\n")
         case .space:
             if autocorrectEnabled {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, executeActions: executeActions)
             }
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):

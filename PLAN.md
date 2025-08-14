@@ -88,7 +88,7 @@
 - [ ] Improve autocorrect of "foo's" to autocorrect "foo" then append "'s"
 
 ### Context-Aware Tuning
-- [ ] Implement smart backspace (context-aware deletion)
+- [ ] Implement smart backspace (context-aware undo)
 - [ ] Implement smart shifting
 - [ ] Adjust key touch areas based on next letter probability
 

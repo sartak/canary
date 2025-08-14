@@ -348,7 +348,10 @@ class KeyboardViewController: UIInputViewController {
                                   self?.handleConfiguration(config)
                               },
                               maybePunctuating: maybePunctuating,
-                              autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled)
+                              autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled,
+                              executeActions: { [weak self] actions in
+                                  self?.executeActions(actions)
+                              })
 
         // Provide haptic feedback for each repeat
         HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
@@ -602,6 +605,8 @@ class KeyboardViewController: UIInputViewController {
                 }
             case .maybePunctuating(let value):
                 maybePunctuating = value
+            case .deleteBackward:
+                textDocumentProxy.deleteBackward()
             }
         }
     }
