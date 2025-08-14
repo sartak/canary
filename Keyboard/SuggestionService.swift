@@ -75,7 +75,13 @@ class SuggestionService {
             currentCorrection = updateTypoCorrection(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
         }
 
-        delegate?.suggestionService(self, didUpdateSuggestions: typeahead, autocorrect: currentCorrection)
+        let filteredTypeahead = if let correction = currentCorrection {
+            typeahead.filter { $0.0 != correction }
+        } else {
+            typeahead
+        }
+
+        delegate?.suggestionService(self, didUpdateSuggestions: filteredTypeahead, autocorrect: currentCorrection)
     }
 
     private func updateTypoCorrection(prefix: String, suffix: String, autocorrectEnabled: Bool = true) -> String? {
