@@ -1,5 +1,7 @@
 # Canary Keyboard for iOS
 
+![Canary keyboard running on iOS showing the custom layout with word suggestions](screenshot.png)
+
 A custom iOS keyboard extension implementing the Canary layout with advanced input methods for fast, accurate typing.
 
 **Fully implemented by Claude Sonnet 4** - this entire codebase is vibe-coded by AI!
