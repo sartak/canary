@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 
 protocol SuggestionServiceDelegate: AnyObject {
-    func suggestionService(_ service: SuggestionService, didUpdateTypeahead suggestions: [(String, [InputAction])])
+    func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?)
 }
 
 enum InputAction {
@@ -64,10 +64,18 @@ class SuggestionService {
 
         let (prefix, suffix) = extractCurrentWordContext()
 
-        currentCorrection = updateTypoCorrection(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
-        let suggestions = updateTypeahead(prefix: prefix, suffix: suffix)
+        let (typeahead, exactMatch) = updateTypeahead(prefix: prefix, suffix: suffix)
 
-        delegate?.suggestionService(self, didUpdateTypeahead: suggestions)
+        if let exactMatch = exactMatch {
+            // We have an exact match, do smart capitalization directly
+            let smartCapitalizedWord = applySmartCapitalization(word: exactMatch, userPrefix: prefix, userSuffix: suffix)
+            currentCorrection = smartCapitalizedWord != (prefix + suffix) ? smartCapitalizedWord : nil
+        } else {
+            // No exact match, proceed with typo correction
+            currentCorrection = updateTypoCorrection(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
+        }
+
+        delegate?.suggestionService(self, didUpdateSuggestions: typeahead, autocorrect: currentCorrection)
     }
 
     private func updateTypoCorrection(prefix: String, suffix: String, autocorrectEnabled: Bool = true) -> String? {
@@ -83,20 +91,13 @@ class SuggestionService {
             return nil
         }
 
-        // Check if word exists in dictionary and apply smart capitalization
-        if let canonicalWord = typeaheadService.getCanonicalWord(prefix) {
-            let smartCapitalizedWord = applySmartCapitalization(word: canonicalWord, userPrefix: prefix, userSuffix: "")
-            return smartCapitalizedWord != prefix ? smartCapitalizedWord : nil
-        }
-
-        // Perform synchronous typo correction
         let startTime = CFAbsoluteTimeGetCurrent()
-        let candidate = typoService.findBestCorrection(for: prefix.lowercased(), maxDistance: 2)
+        let correction = typoService.findBestCorrection(for: prefix.lowercased(), maxDistance: 2)
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000 // Convert to milliseconds
 
-        if let candidate = candidate {
-            let correction = applySmartCapitalization(word: candidate, userPrefix: prefix, userSuffix: "")
+        if let correction = correction {
+            let correction = applySmartCapitalization(word: correction, userPrefix: prefix, userSuffix: "")
             print("TypoService: '\(prefix.lowercased())' -> '\(correction)' in \(String(format: "%.3f", duration))ms")
             return correction
         } else {
@@ -105,12 +106,12 @@ class SuggestionService {
         }
     }
 
-    private func updateTypeahead(prefix: String, suffix: String) -> [(String, [InputAction])] {
+    private func updateTypeahead(prefix: String, suffix: String) -> ([(String, [InputAction])], String?) {
         let prefixLower = prefix.lowercased()
         let suffixLower = suffix.lowercased()
 
         let startTime = CFAbsoluteTimeGetCurrent()
-        let matchingWords = typeaheadService.getCompletions(prefix: prefixLower, suffix: suffixLower)
+        let (matchingWords, exactMatch) = typeaheadService.getCompletions(prefix: prefixLower, suffix: suffixLower)
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000 // Convert to milliseconds
 
@@ -120,7 +121,7 @@ class SuggestionService {
             print("TypeaheadService: '\(prefixLower)|\(suffixLower)' -> \(matchingWords.count) completions in \(String(format: "%.3f", duration))ms")
         }
 
-        return matchingWords.map { word in
+        let suggestions = matchingWords.map { word in
             let displayWord = applySmartCapitalization(word: word, userPrefix: prefix, userSuffix: suffix)
 
             if !prefix.isEmpty && !suffix.isEmpty {
@@ -155,6 +156,8 @@ class SuggestionService {
                 return (displayWord, [.insert(insertText), .maybePunctuating(true)])
             }
         }
+
+        return (suggestions, exactMatch)
     }
 
     /// Applies smart capitalization rules based on user input patterns

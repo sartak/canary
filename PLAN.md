@@ -83,7 +83,7 @@
 - [x] Create suggestion bar above keyboard
 - [x] Implement suggestion selection and insertion
 - [x] Add enhanced auto-correction with prediction integration
-- [ ] Display autocorrect term in suggestions bar
+- [x] Display autocorrect term in suggestions bar
 - [ ] Opting out of an autocorrect by tapping on the suggestions bar preview
 - [ ] Improve autocorrect of "foo's" to autocorrect "foo" then append "'s"
 
@@ -117,6 +117,7 @@
 ### Smarter Autocorrect
 - [ ] Add post-processing to pick closest match based on keyboard distance
 - [ ] Fix smart capitalization: "WRNg" autocorrects to "WROng" but should be "WRoNg"
+- [ ] When the cursor is in the middle of a word, use suffix in autocorrect
 
 ## Milestone 10: Text Expansion
 **Goal**: Add custom shortcuts that expand to longer phrases

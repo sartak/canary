@@ -6,6 +6,8 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
     private var typeaheads: [(String, [InputAction])] = []
     private var onTypeaheadTapped: (([InputAction]) -> Void)?
 
+    private var typoCorrection: String?
+
     private var scrollView: UIScrollView!
 
     init(deviceLayout: DeviceLayout) {
@@ -32,22 +34,34 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         self.onTypeaheadTapped = onTapped
     }
 
-    private func createTypeaheadButton(label: String, actions: [InputAction]) -> UIButton {
+    private func createButton(title: String, textColor: UIColor, target: Selector, leftPadding: CGFloat, rightPadding: CGFloat, x: CGFloat, y: CGFloat, height: CGFloat) -> UIButton {
         var config = UIButton.Configuration.plain()
-        let theme = ColorTheme.current(for: traitCollection)
 
-        config.title = label
-        config.baseForegroundColor = theme.typeaheadTextColor
+        config.title = title
+        config.baseForegroundColor = textColor
         config.titleAlignment = .leading
-        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var outgoing = incoming
-            outgoing.font = UIFont.systemFont(ofSize: self.deviceLayout.suggestionFontSize)
-            return outgoing
-        }
 
         let button = UIButton(configuration: config)
-        button.addTarget(self, action: #selector(typeaheadButtonTapped), for: .touchUpInside)
+        button.addTarget(self, action: target, for: .touchUpInside)
 
+        // Calculate button width based on text content plus padding
+        let font = UIFont.systemFont(ofSize: deviceLayout.suggestionFontSize)
+        let textSize = (title as NSString).size(withAttributes: [.font: font])
+
+        // Add small buffer to prevent text truncation in UIButton
+        let textBuffer: CGFloat = 4.0
+        let width = textSize.width + leftPadding + rightPadding + textBuffer
+
+        // Update button configuration with padding and font
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: leftPadding, bottom: 0, trailing: rightPadding)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = font
+            return outgoing
+        }
+        button.configuration = config
+
+        button.frame = CGRect(x: x, y: y, width: width, height: height)
         return button
     }
 
@@ -58,6 +72,9 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         onTypeaheadTapped?(actions)
     }
 
+    @objc private func typoCorrectionButtonTapped(_ sender: UIButton) {
+    }
+
     private func layoutSuggestions() {
         scrollView.contentOffset.x = 0
 
@@ -65,41 +82,36 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         scrollView.subviews.forEach { $0.removeFromSuperview() }
         scrollView.layer.sublayers?.removeAll()
 
-        let theme = ColorTheme.current(for: traitCollection)
+        var buttons: [UIButton] = []
         var currentX: CGFloat = 0
         let buttonHeight = deviceLayout.topPadding - deviceLayout.verticalGap
         let buttonY = (bounds.height - buttonHeight) / 2
 
+        let theme = ColorTheme.current(for: traitCollection)
+
+        // Create typo correction button first if available
+        if let correction = typoCorrection {
+            let button = createButton(title: correction, textColor: theme.autocorrectColor, target: #selector(typoCorrectionButtonTapped), leftPadding: 0, rightPadding: deviceLayout.suggestionGap, x: currentX, y: buttonY, height: buttonHeight)
+            scrollView.addSubview(button)
+            currentX += button.frame.width
+            buttons.append(button)
+        }
+
         // Create and layout buttons for each typeahead
-        for (index, (label, actions)) in typeaheads.enumerated() {
-            let button = createTypeaheadButton(label: label, actions: actions)
+        for (index, (label, _)) in typeaheads.enumerated() {
+            // First button overall gets no left padding, otherwise normal padding
+            let leftPadding = buttons.isEmpty ? 0 : deviceLayout.suggestionGap
+            let button = createButton(title: label, textColor: theme.typeaheadTextColor, target: #selector(typeaheadButtonTapped), leftPadding: leftPadding, rightPadding: deviceLayout.suggestionGap, x: currentX, y: buttonY, height: buttonHeight)
             button.tag = index
             scrollView.addSubview(button)
+            currentX += button.frame.width
+            buttons.append(button)
+        }
 
-            // Calculate button width based on text content plus padding
-            let text = button.configuration?.title ?? ""
-            let textSize = (text as NSString).size(withAttributes: [
-                .font: UIFont.systemFont(ofSize: deviceLayout.suggestionFontSize)
-            ])
-
-            // First button gets no left padding, others get normal padding
-            let leftPadding = index == 0 ? 0 : deviceLayout.suggestionGap
-            let rightPadding = deviceLayout.suggestionGap
-
-            // Add small buffer to prevent text truncation in UIButton
-            let textBuffer: CGFloat = 4.0
-            let buttonWidth = textSize.width + leftPadding + rightPadding + textBuffer
-
-            // Update button configuration with padding
-            var config = button.configuration ?? UIButton.Configuration.plain()
-            config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: leftPadding, bottom: 0, trailing: rightPadding)
-            button.configuration = config
-
-            button.frame = CGRect(x: currentX, y: buttonY, width: buttonWidth, height: buttonHeight)
-            currentX += buttonWidth
-
-            // Add divider line after each button except the last one
-            if index < typeaheads.count - 1 {
+        // Create dividers between buttons
+        if buttons.count > 1 {
+            for i in 1..<buttons.count {
+                let button = buttons[i - 1]
                 let dividerLayer = CALayer()
                 dividerLayer.backgroundColor = theme.suggestionDividerColor.cgColor
                 dividerLayer.frame = CGRect(x: button.frame.maxX, y: buttonY, width: 0.5, height: buttonHeight)
@@ -119,9 +131,9 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
 
     // MARK: - SuggestionServiceDelegate
 
-    func suggestionService(_ service: SuggestionService, didUpdateTypeahead suggestions: [(String, [InputAction])]) {
-        self.typeaheads = suggestions
-        self.onTypeaheadTapped = onTypeaheadTapped ?? { _ in }
+    func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?) {
+        self.typeaheads = typeahead
+        self.typoCorrection = autocorrect
         layoutSuggestions()
     }
 }
