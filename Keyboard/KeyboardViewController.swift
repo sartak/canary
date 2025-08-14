@@ -281,12 +281,23 @@ class KeyboardViewController: UIInputViewController {
 
     private func handleAlternateSelected(_ alternate: String, from keyData: KeyData) {
         // Handle smart punctuation for alternates
+        let textToInsert: String
         if Key.shouldUnspacePunctuation(alternate) && maybePunctuating {
             textDocumentProxy.deleteBackward()
             let trailingSpace = Key.shouldAddTrailingSpaceAfterPunctuation(alternate) ? " " : ""
-            textDocumentProxy.insertText(alternate + trailingSpace)
+            textToInsert = alternate + trailingSpace
         } else {
-            textDocumentProxy.insertText(alternate)
+            textToInsert = alternate
+        }
+
+        if Key.shouldTriggerAutocorrect(alternate) {
+            Key.applyAutocorrectWithTrigger(text: textToInsert, to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: { [weak self] in
+                self?.toggleAutocompleteWord()
+            }, executeActions: { [weak self] actions in
+                self?.executeActions(actions)
+            })
+        } else {
+            textDocumentProxy.insertText(textToInsert)
         }
 
         // Auto-unshift after inserting alternate
