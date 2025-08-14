@@ -29,6 +29,7 @@ class KeyboardViewController: UIInputViewController {
     private var maybePunctuating = false
     private var autocorrectAppDisabled = false
     private var autocorrectUserDisabled = false
+    private var autocompleteWordDisabled = false
 
     // Expose autocorrect state for testing/debugging
     var isAutocorrectEnabled: Bool {
@@ -349,6 +350,10 @@ class KeyboardViewController: UIInputViewController {
                               },
                               maybePunctuating: maybePunctuating,
                               autocorrectEnabled: !autocorrectAppDisabled && !autocorrectUserDisabled,
+                              autocompleteWordDisabled: autocompleteWordDisabled,
+                              toggleAutocompleteWord: { [weak self] in
+                                  self?.toggleAutocompleteWord()
+                              },
                               executeActions: { [weak self] actions in
                                   self?.executeActions(actions)
                               })
@@ -535,6 +540,10 @@ class KeyboardViewController: UIInputViewController {
             self?.refreshSuggestions()
         }
 
+        suggestionView.setOnAutocorrectToggle { [weak self] in
+            self?.toggleAutocompleteWord()
+        }
+
         view.addSubview(suggestionView)
 
         // Position the suggestion view to use the full topPadding height
@@ -711,6 +720,11 @@ class KeyboardViewController: UIInputViewController {
     private func enableAutocorrect() {
         autocorrectAppDisabled = false
         refreshSuggestions()
+    }
+
+    func toggleAutocompleteWord() {
+        autocompleteWordDisabled.toggle()
+        suggestionView.setAutocompleteWordDisabled(autocompleteWordDisabled)
     }
 
     private func handleConfiguration(_ config: Configuration) {

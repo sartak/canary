@@ -78,19 +78,23 @@ struct Key {
         return text.count == 1 && autocorrectTriggers.contains(text.first!)
     }
 
-    static func applyAutocorrect(to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, executeActions: @escaping ([InputAction]) -> Void) {
-        if let actions = suggestionService.autocorrectActions {
-            executeActions(actions)
+    static func applyAutocorrect(to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, autocompleteWordDisabled: Bool, toggleAutocompleteWord: @escaping () -> Void, executeActions: @escaping ([InputAction]) -> Void) {
+        if autocompleteWordDisabled {
+            toggleAutocompleteWord()
+        } else {
+            if let actions = suggestionService.autocorrectActions {
+                executeActions(actions)
+            }
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, executeActions: @escaping ([InputAction]) -> Void) {
+    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocorrectEnabled: Bool = true, autocompleteWordDisabled: Bool = false, toggleAutocompleteWord: @escaping () -> Void = {}, executeActions: @escaping ([InputAction]) -> Void) {
         // Handle the key action
         switch keyType {
         case .simple(let text):
             // Check if this character should trigger autocorrect
             if autocorrectEnabled && Key.shouldTriggerAutocorrect(text) {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, executeActions: executeActions)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
             }
 
             // Handle spacing for punctuation
@@ -109,12 +113,12 @@ struct Key {
             shiftHandler()
         case .enter:
             if autocorrectEnabled {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, executeActions: executeActions)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
             }
             textDocumentProxy.insertText("\n")
         case .space:
             if autocorrectEnabled {
-                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, executeActions: executeActions)
+                Key.applyAutocorrect(to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
             }
             textDocumentProxy.insertText(" ")
         case .layerSwitch(let layer):

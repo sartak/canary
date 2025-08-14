@@ -5,8 +5,10 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
 
     private var typeaheads: [(String, [InputAction])] = []
     private var onTypeaheadTapped: (([InputAction]) -> Void)?
+    private var onAutocorrectToggle: (() -> Void)?
 
     private var autocorrectWord: String?
+    private var autocompleteWordDisabled = false
 
     private var scrollView: UIScrollView!
 
@@ -34,7 +36,16 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         self.onTypeaheadTapped = onTapped
     }
 
-    private func createButton(title: String, textColor: UIColor, target: Selector, leftPadding: CGFloat, rightPadding: CGFloat, x: CGFloat, y: CGFloat, height: CGFloat) -> UIButton {
+    func setOnAutocorrectToggle(_ onToggle: @escaping () -> Void) {
+        self.onAutocorrectToggle = onToggle
+    }
+
+    func setAutocompleteWordDisabled(_ disabled: Bool) {
+        self.autocompleteWordDisabled = disabled
+        layoutSuggestions()
+    }
+
+    private func createButton(title: String, textColor: UIColor, target: Selector, leftPadding: CGFloat, rightPadding: CGFloat, x: CGFloat, y: CGFloat, height: CGFloat, strikethrough: Bool = false) -> UIButton {
         var config = UIButton.Configuration.plain()
 
         config.title = title
@@ -57,6 +68,9 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
             var outgoing = incoming
             outgoing.font = font
+            if strikethrough {
+                outgoing.strikethroughStyle = .single
+            }
             return outgoing
         }
         button.configuration = config
@@ -73,6 +87,7 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
     }
 
     @objc private func autocorrectButtonTapped(_ sender: UIButton) {
+        onAutocorrectToggle?()
     }
 
     private func layoutSuggestions() {
@@ -91,7 +106,7 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
 
         // Create autocorrect button first if available
         if let correction = autocorrectWord {
-            let button = createButton(title: correction, textColor: theme.autocorrectColor, target: #selector(autocorrectButtonTapped), leftPadding: 0, rightPadding: deviceLayout.suggestionGap, x: currentX, y: buttonY, height: buttonHeight)
+            let button = createButton(title: correction, textColor: theme.autocorrectColor, target: #selector(autocorrectButtonTapped), leftPadding: 0, rightPadding: deviceLayout.suggestionGap, x: currentX, y: buttonY, height: buttonHeight, strikethrough: autocompleteWordDisabled)
             scrollView.addSubview(button)
             currentX += button.frame.width
             buttons.append(button)

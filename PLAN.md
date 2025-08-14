@@ -84,7 +84,7 @@
 - [x] Implement suggestion selection and insertion
 - [x] Add enhanced auto-correction with prediction integration
 - [x] Display autocorrect term in suggestions bar
-- [ ] Opting out of an autocorrect by tapping on the suggestions bar preview
+- [x] Opting out of an autocorrect by tapping on the suggestions bar preview
 - [ ] Improve autocorrect of "foo's" to autocorrect "foo" then append "'s"
 
 ### Context-Aware Tuning
