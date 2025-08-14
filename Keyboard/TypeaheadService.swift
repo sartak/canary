@@ -28,7 +28,7 @@ class TypeaheadService {
             ORDER BY word_lower = ? DESC, frequency_rank LIMIT \(maxSuggestions)
         """
 
-        let prefixOnlyQuery = "SELECT word, hidden FROM prefixes WHERE prefix_lower = ? ORDER BY LOWER(word) = ? DESC, frequency_rank LIMIT \(maxSuggestions)"
+        let prefixOnlyQuery = "SELECT word, hidden FROM prefixes WHERE prefix_lower = ? ORDER BY frequency_rank"
 
         let suffixOnlyQuery = "SELECT word, hidden FROM words_by_suffix WHERE word_lower_reversed LIKE ? ORDER BY word_lower = ? DESC, frequency_rank LIMIT \(maxSuggestions)"
 
@@ -83,9 +83,7 @@ class TypeaheadService {
             sqlite3_bind_text(statement, 3, targetWord, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
         } else if !prefix.isEmpty {
             statement = prefixOnlyStatement
-            let targetWord = (prefix + suffix).lowercased()
             sqlite3_bind_text(statement, 1, prefix.lowercased(), -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-            sqlite3_bind_text(statement, 2, targetWord, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
         } else if !suffix.isEmpty {
             statement = suffixOnlyStatement
             let reversedSuffix = String(suffix.reversed())

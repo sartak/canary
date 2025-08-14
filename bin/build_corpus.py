@@ -162,10 +162,11 @@ def create_database_tables(conn: sqlite3.Connection):
 
 
 def populate_prefixes_table(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
-    """Populate the prefixes table with all possible prefixes for each word."""
+    """Populate the prefixes table with all possible prefixes for each word, capped at 20 visible entries per prefix."""
     print("Building prefixes table...")
 
     prefixes_data = []
+    prefix_visible_counts = {}
 
     for rank, (word, original_rank) in enumerate(filtered_words, 1):
         word_lower = word.lower()
@@ -174,7 +175,12 @@ def populate_prefixes_table(conn: sqlite3.Connection, filtered_words: List[Tuple
         # Generate all prefixes for this word (1 to full length)
         for i in range(1, len(word_lower) + 1):
             prefix = word_lower[:i]
-            prefixes_data.append((prefix, word, rank, is_hidden))
+
+            # Always include hidden words, but cap visible words at 20 per prefix
+            if is_hidden or prefix_visible_counts.get(prefix, 0) < 20:
+                prefixes_data.append((prefix, word, rank, is_hidden))
+                if not is_hidden:
+                    prefix_visible_counts[prefix] = prefix_visible_counts.get(prefix, 0) + 1
 
     # Batch insert for performance
     conn.executemany(
@@ -183,7 +189,7 @@ def populate_prefixes_table(conn: sqlite3.Connection, filtered_words: List[Tuple
     )
 
     conn.commit()
-    print(f"Populated prefixes table with {len(prefixes_data)} prefix entries")
+    print(f"Populated prefixes table with {len(prefixes_data)} prefix entries (capped at 20 visible per prefix)")
 
 
 def populate_database(conn: sqlite3.Connection, filtered_words: List[Tuple[str, int]], hidden_words: Set[str]):
