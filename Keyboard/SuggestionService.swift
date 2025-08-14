@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 protocol SuggestionServiceDelegate: AnyObject {
     func suggestionService(_ service: SuggestionService, didUpdateTypeahead suggestions: [(String, [InputAction])])
@@ -20,21 +21,31 @@ class SuggestionService {
     private var typeaheadService: TypeaheadService
 
     private var typoService: TypoService
-    private var typoCurrentWord: String = ""
-    private var typoResult: String?? = nil // nil = not completed, .some(nil) = completed with no result, .some(result) = completed with result
-    private var typoQueue: DispatchQueue
-    private var typoTask: DispatchWorkItem?
-    private var typoCompletion: (String?) -> Void = { _ in }
+    private let db: OpaquePointer
+    var currentCorrection: String?
 
     init?() {
-        typoQueue = DispatchQueue(label: "typo-correction", qos: .userInitiated)
-
         guard let path = Bundle(for: SuggestionService.self).path(forResource: "words", ofType: "db") else {
             return nil
         }
 
-        guard let typoService = TypoService(dbPath: path),
-              let typeaheadService = TypeaheadService(dbPath: path) else {
+        var dbTemp: OpaquePointer?
+        if sqlite3_open(path, &dbTemp) != SQLITE_OK {
+            print("SuggestionService: Error opening database: \(String(cString: sqlite3_errmsg(dbTemp)))")
+            if dbTemp != nil {
+                sqlite3_close(dbTemp)
+            }
+            return nil
+        }
+
+        guard let db = dbTemp else {
+            return nil
+        }
+        self.db = db
+
+        let typoService = TypoService(db: db)
+        guard let typeaheadService = TypeaheadService(db: db) else {
+            sqlite3_close(db)
             return nil
         }
 
@@ -42,79 +53,59 @@ class SuggestionService {
         self.typeaheadService = typeaheadService
     }
 
+    deinit {
+        sqlite3_close(db)
+    }
+
     func updateContext(before: String?, after: String?, selected: String?, autocorrectEnabled: Bool = true) {
         self.contextBefore = before
         self.contextAfter = after
         self.selectedText = selected
 
-        // Update proactive typo correction
-        updateProactiveTypoCorrection(autocorrectEnabled: autocorrectEnabled)
+        let (prefix, suffix) = extractCurrentWordContext()
 
-        let suggestions = makeSuggestions()
+        currentCorrection = updateTypoCorrection(prefix: prefix, suffix: suffix, autocorrectEnabled: autocorrectEnabled)
+        let suggestions = updateTypeahead(prefix: prefix, suffix: suffix)
+
         delegate?.suggestionService(self, didUpdateTypeahead: suggestions)
     }
 
-    private func updateProactiveTypoCorrection(autocorrectEnabled: Bool = true) {
-        let (prefix, _) = extractCurrentWordContext()
-        let newWord = prefix.lowercased()
+    private func updateTypoCorrection(prefix: String, suffix: String, autocorrectEnabled: Bool = true) -> String? {
+        if prefix.isEmpty || !autocorrectEnabled {
+            return nil
+        }
 
-        // Only start new search if word changed
-        if newWord != typoCurrentWord {
-            typoCurrentWord = newWord
+        // Skip correction for strings containing invalid characters
+        // Only allow words composed entirely of valid word characters
+        if !prefix.indices.allSatisfy({ index in
+            Self.isWordCharacter(in: prefix, at: index)
+        }) {
+            return nil
+        }
 
-            // Cancel any existing search
-            typoTask?.cancel()
-            typoService.cancel()
+        // Check if word exists in dictionary and apply smart capitalization
+        if let canonicalWord = typeaheadService.getCanonicalWord(prefix) {
+            let smartCapitalizedWord = applySmartCapitalization(word: canonicalWord, userPrefix: prefix, userSuffix: "")
+            return smartCapitalizedWord != prefix ? smartCapitalizedWord : nil
+        }
 
-            if newWord.isEmpty || !autocorrectEnabled {
-                typoResult = .some(nil)
-                return
-            }
+        // Perform synchronous typo correction
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let candidate = typoService.findBestCorrection(for: prefix.lowercased(), maxDistance: 2)
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000 // Convert to milliseconds
 
-            // Mark search as not completed
-            typoResult = nil
-
-            // Start new background search
-            var task: DispatchWorkItem!
-            task = DispatchWorkItem { [weak self] in
-                guard let self = self else {
-                    return
-                }
-
-                // Check if search was cancelled by checking if current word changed
-                if newWord != self.typoCurrentWord {
-                    return
-                }
-
-                let startTime = CFAbsoluteTimeGetCurrent()
-                let correction = self.autocorrect(for: newWord, task: task)
-                let endTime = CFAbsoluteTimeGetCurrent()
-                let duration = (endTime - startTime) * 1000 // Convert to milliseconds
-
-                if let correction = correction {
-                    print("TypoService: '\(newWord)' -> '\(correction)' in \(String(format: "%.3f", duration))ms")
-                } else {
-                    print("TypoService: '\(newWord)' -> no correction in \(String(format: "%.3f", duration))ms")
-                }
-
-                // Call completion handler immediately (not on main thread to avoid deadlock)
-                // But update proactive result on main thread
-                if newWord == self.typoCurrentWord {
-                    DispatchQueue.main.async {
-                        self.typoResult = .some(correction)
-                    }
-                    self.typoCompletion(correction)
-                }
-            }
-
-            typoTask = task
-            typoQueue.async(execute: task)
+        if let candidate = candidate {
+            let correction = applySmartCapitalization(word: candidate, userPrefix: prefix, userSuffix: "")
+            print("TypoService: '\(prefix.lowercased())' -> '\(correction)' in \(String(format: "%.3f", duration))ms")
+            return correction
+        } else {
+            print("TypoService: '\(prefix.lowercased())' -> no correction in \(String(format: "%.3f", duration))ms")
+            return nil
         }
     }
 
-    private func makeSuggestions() -> [(String, [InputAction])] {
-        let (prefix, suffix) = extractCurrentWordContext()
-
+    private func updateTypeahead(prefix: String, suffix: String) -> [(String, [InputAction])] {
         let prefixLower = prefix.lowercased()
         let suffixLower = suffix.lowercased()
 
@@ -301,71 +292,5 @@ class SuggestionService {
         }
 
         return (prefix, suffix)
-    }
-
-    private func autocorrect(for word: String, task: DispatchWorkItem? = nil) -> String? {
-        return typoService.findBestCorrection(for: word, maxDistance: 2, task: task)
-    }
-
-    func correctTypo(word: String) -> String? {
-        let trimmedWord = word.trimmingCharacters(in: .whitespaces)
-
-        guard !trimmedWord.isEmpty else { return nil }
-
-        // Skip correction for strings containing invalid characters
-        // Only allow words composed entirely of valid word characters
-        if !trimmedWord.indices.allSatisfy({ index in
-            Self.isWordCharacter(in: trimmedWord, at: index)
-        }) {
-            return nil
-        }
-
-        // Check if word exists in dictionary and apply smart capitalization
-        if let canonicalWord = typeaheadService.getCanonicalWord(trimmedWord) {
-            let smartCapitalizedWord = applySmartCapitalization(word: canonicalWord, userPrefix: trimmedWord, userSuffix: "")
-
-            if smartCapitalizedWord != trimmedWord {
-                return smartCapitalizedWord
-            } else {
-                return nil
-            }
-        }
-
-        // Use proactive result if available and current
-        let candidate: String?
-        var wasCanceled = false
-
-        if trimmedWord.lowercased() == typoCurrentWord {
-            if let proactiveResult = typoResult {
-                // Search already completed proactively - user wait time is essentially 0
-                candidate = proactiveResult
-            } else if let task = typoTask, !task.isCancelled {
-                // Search still running - user must wait for completion
-                let semaphore = DispatchSemaphore(value: 0)
-                var taskResult: String?
-
-                typoCompletion = { result in
-                    taskResult = result
-                    semaphore.signal()
-                }
-
-                semaphore.wait()
-
-                candidate = taskResult
-                wasCanceled = false // If we get here, the task completed (not cancelled)
-            } else {
-                // No search running - no correction
-                candidate = nil
-            }
-        } else {
-            // Word doesn't match current search - no correction
-            candidate = nil
-        }
-
-        guard let candidate = candidate, !wasCanceled else {
-            return nil
-        }
-
-        return applySmartCapitalization(word: candidate, userPrefix: trimmedWord, userSuffix: "")
     }
 }

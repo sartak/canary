@@ -120,14 +120,8 @@ struct Key {
     }
 
     static func applyAutocorrectWithVisual(to textDocumentProxy: UITextDocumentProxy, at position: CGPoint, using suggestionService: SuggestionService, visualHandler: @escaping (String, String, CGPoint) -> Void) {
-        guard let wordInfo = getCurrentWord(from: textDocumentProxy) else {
-            return
-        }
-
-        let correctedWord = suggestionService.correctTypo(word: wordInfo.word) ?? wordInfo.word
-
-        // Only show visual feedback and apply correction if the word actually changed
-        if correctedWord != wordInfo.word {
+        if let correctedWord = suggestionService.currentCorrection,
+           let wordInfo = getCurrentWord(from: textDocumentProxy) {
             visualHandler(wordInfo.word, correctedWord, position)
             replaceCurrentWord(in: textDocumentProxy, with: correctedWord)
         }

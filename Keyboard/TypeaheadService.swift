@@ -13,21 +13,8 @@ class TypeaheadService {
     private let commonWordsStatement: OpaquePointer
     private let canonicalWordStatement: OpaquePointer
 
-    init?(dbPath: String, maxSuggestions: Int = 20) {
+    init?(db: OpaquePointer, maxSuggestions: Int = 20) {
         self.maxSuggestions = maxSuggestions
-
-        var dbTemp: OpaquePointer?
-        if sqlite3_open(dbPath, &dbTemp) != SQLITE_OK {
-            print("TypeaheadService: Error opening database: \(String(cString: sqlite3_errmsg(dbTemp)))")
-            if dbTemp != nil {
-                sqlite3_close(dbTemp)
-            }
-            return nil
-        }
-
-        guard let db = dbTemp else {
-            return nil
-        }
         self.db = db
 
         // Prepare statements - if any fail, cleanup and return nil
@@ -85,7 +72,6 @@ class TypeaheadService {
         sqlite3_finalize(suffixOnlyStatement)
         sqlite3_finalize(commonWordsStatement)
         sqlite3_finalize(canonicalWordStatement)
-        sqlite3_close(db)
     }
 
     func getCompletions(prefix: String, suffix: String) -> [String] {

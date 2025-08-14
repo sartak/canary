@@ -8,19 +8,7 @@ class TypoService {
     // Cache for batch queries by placeholder count
     private var batchQueryCache: [Int: OpaquePointer] = [:]
 
-    init?(dbPath: String) {
-        var dbTemp: OpaquePointer?
-        if sqlite3_open(dbPath, &dbTemp) != SQLITE_OK {
-            print("TypoService: Error opening database: \(String(cString: sqlite3_errmsg(dbTemp)))")
-            if dbTemp != nil {
-                sqlite3_close(dbTemp)
-            }
-            return nil
-        }
-
-        guard let db = dbTemp else {
-            return nil
-        }
+    init(db: OpaquePointer) {
         self.db = db
     }
 
@@ -29,8 +17,6 @@ class TypoService {
         for (_, statement) in batchQueryCache {
             sqlite3_finalize(statement)
         }
-
-        sqlite3_close(db)
     }
 
     func cancel() {
