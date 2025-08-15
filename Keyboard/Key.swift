@@ -7,6 +7,24 @@
 
 import UIKit
 
+protocol KeyActionDelegate: AnyObject {
+    var textDocumentProxy: UITextDocumentProxy { get }
+    var suggestionService: SuggestionService { get }
+    var maybePunctuating: Bool { get }
+    var autocompleteWordDisabled: Bool { get }
+    var undoActions: [InputAction]? { get }
+
+    func switchToLayer(_ layer: Layer)
+    func switchToLayout(_ layout: KeyboardLayout)
+    func toggleShift()
+    func autoUnshift()
+    func advanceToNextInputMode()
+    func handleConfiguration(_ config: Configuration)
+    func toggleAutocompleteWord()
+    func executeActions(_ actions: [InputAction])
+    func clearUndo()
+}
+
 enum ShiftState: Equatable, Comparable {
     case unshifted
     case shifted
@@ -61,10 +79,11 @@ enum KeyType: Equatable {
     case empty
 }
 
-struct Key {
+class Key {
     let keyType: KeyType
     let longPressBehavior: LongPressBehavior?
     let doubleTapBehavior: DoubleTapBehavior?
+    weak var delegate: KeyActionDelegate?
 
     init(_ keyType: KeyType, longPressBehavior: LongPressBehavior? = nil, doubleTapBehavior: DoubleTapBehavior? = nil) {
         self.keyType = keyType
@@ -116,12 +135,14 @@ struct Key {
         }
     }
 
-    func didTap(textDocumentProxy: UITextDocumentProxy, suggestionService: SuggestionService, layerSwitchHandler: @escaping (Layer) -> Void, layoutSwitchHandler: @escaping (KeyboardLayout) -> Void, shiftHandler: @escaping () -> Void, autoUnshiftHandler: @escaping () -> Void, globeHandler: @escaping () -> Void, configurationHandler: @escaping (Configuration) -> Void, maybePunctuating: Bool, autocompleteWordDisabled: Bool = false, toggleAutocompleteWord: @escaping () -> Void = {}, executeActions: @escaping ([InputAction]) -> Void, undoActions: [InputAction]?, clearUndo: @escaping () -> Void) {
+    func didTap() {
+        guard let delegate = delegate else { return }
+
         // Clear undo state before handling any key (except when backspace uses undo)
-        if case .backspace = keyType, undoActions != nil {
+        if case .backspace = keyType, delegate.undoActions != nil {
             // Don't clear undo yet - backspace will use it
         } else {
-            clearUndo()
+            delegate.clearUndo()
         }
 
         // Handle the key action
@@ -129,47 +150,47 @@ struct Key {
         case .simple(let text):
             // Handle spacing for punctuation first
             if Key.shouldUnspacePunctuation(text) {
-                if maybePunctuating {
-                    textDocumentProxy.deleteBackward()
+                if delegate.maybePunctuating {
+                    delegate.textDocumentProxy.deleteBackward()
                 }
-                let trailingSpace = (maybePunctuating && Key.shouldAddTrailingSpaceAfterPunctuation(text)) ? " " : ""
+                let trailingSpace = (delegate.maybePunctuating && Key.shouldAddTrailingSpaceAfterPunctuation(text)) ? " " : ""
                 let fullText = text + trailingSpace
 
                 // Check if this character should trigger autocorrect
                 if Key.shouldTriggerAutocorrect(text) {
-                    Key.applyAutocorrectWithTrigger(text: fullText, to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
+                    Key.applyAutocorrectWithTrigger(text: fullText, to: delegate.textDocumentProxy, using: delegate.suggestionService, autocompleteWordDisabled: delegate.autocompleteWordDisabled, toggleAutocompleteWord: delegate.toggleAutocompleteWord, executeActions: delegate.executeActions)
                 } else {
-                    textDocumentProxy.insertText(fullText)
+                    delegate.textDocumentProxy.insertText(fullText)
                 }
             } else {
                 // Check if this character should trigger autocorrect
                 if Key.shouldTriggerAutocorrect(text) {
-                    Key.applyAutocorrectWithTrigger(text: text, to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
+                    Key.applyAutocorrectWithTrigger(text: text, to: delegate.textDocumentProxy, using: delegate.suggestionService, autocompleteWordDisabled: delegate.autocompleteWordDisabled, toggleAutocompleteWord: delegate.toggleAutocompleteWord, executeActions: delegate.executeActions)
                 } else {
-                    textDocumentProxy.insertText(text)
+                    delegate.textDocumentProxy.insertText(text)
                 }
             }
         case .backspace:
-            if let undoActions = undoActions {
-                executeActions(undoActions)
-                clearUndo()
+            if let undoActions = delegate.undoActions {
+                delegate.executeActions(undoActions)
+                delegate.clearUndo()
             } else {
-                textDocumentProxy.deleteBackward()
+                delegate.textDocumentProxy.deleteBackward()
             }
         case .shift:
-            shiftHandler()
+            delegate.toggleShift()
         case .enter:
-            Key.applyAutocorrectWithTrigger(text: "\n", to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
+            Key.applyAutocorrectWithTrigger(text: "\n", to: delegate.textDocumentProxy, using: delegate.suggestionService, autocompleteWordDisabled: delegate.autocompleteWordDisabled, toggleAutocompleteWord: delegate.toggleAutocompleteWord, executeActions: delegate.executeActions)
         case .space:
-            Key.applyAutocorrectWithTrigger(text: " ", to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: toggleAutocompleteWord, executeActions: executeActions)
+            Key.applyAutocorrectWithTrigger(text: " ", to: delegate.textDocumentProxy, using: delegate.suggestionService, autocompleteWordDisabled: delegate.autocompleteWordDisabled, toggleAutocompleteWord: delegate.toggleAutocompleteWord, executeActions: delegate.executeActions)
         case .layerSwitch(let layer):
-            layerSwitchHandler(layer)
+            delegate.switchToLayer(layer)
         case .layoutSwitch(let layout):
-            layoutSwitchHandler(layout)
+            delegate.switchToLayout(layout)
         case .globe:
-            globeHandler()
+            delegate.advanceToNextInputMode()
         case .configuration(let config):
-            configurationHandler(config)
+            delegate.handleConfiguration(config)
         case .empty:
             // Do nothing for empty keys
             break
@@ -180,7 +201,7 @@ struct Key {
         case .shift:
             break
         case .simple, .backspace, .enter, .space, .layerSwitch, .layoutSwitch, .globe, .configuration:
-            autoUnshiftHandler()
+            delegate.autoUnshift()
         case .empty:
             break
         }

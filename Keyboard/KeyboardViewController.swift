@@ -10,7 +10,7 @@ import UIKit
 private let largeScreenWidth: CGFloat = 600
 private let dismissButtonSize: CGFloat = 24
 
-class KeyboardViewController: UIInputViewController {
+class KeyboardViewController: UIInputViewController, KeyActionDelegate {
     private var currentLayer: Layer = .alpha
     private var userShiftState: ShiftState = .unshifted
     private var appShiftState: ShiftState = .unshifted
@@ -26,13 +26,13 @@ class KeyboardViewController: UIInputViewController {
     private var copyButton: UIButton!
     private var pasteButton: UIButton!
     private var suggestionView: SuggestionView!
-    private var suggestionService: SuggestionService!
+    var suggestionService: SuggestionService = SuggestionService()!
     private var pendingRefresh = false
-    private var maybePunctuating = false
+    var maybePunctuating = false
     private var autocorrectAppDisabled = false
     private var autocorrectUserDisabled = false
-    private var autocompleteWordDisabled = false
-    private var undoActions: [InputAction]?
+    var autocompleteWordDisabled = false
+    var undoActions: [InputAction]?
 
     // Expose autocorrect state for testing/debugging
     var isAutocorrectEnabled: Bool {
@@ -222,6 +222,7 @@ class KeyboardViewController: UIInputViewController {
                     key: key,
                     frame: frame
                 )
+                key.delegate = self
                 keys.append(keyData)
                 xOffset += keyWidth
             case .gap(let gapWidth):
@@ -342,38 +343,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func performKeyAction(_ keyData: KeyData) {
-        keyData.key.didTap(textDocumentProxy: textDocumentProxy,
-                              suggestionService: suggestionService,
-                              layerSwitchHandler: { [weak self] newLayer in
-                                  self?.switchToLayer(newLayer)
-                              },
-                              layoutSwitchHandler: { [weak self] newLayout in
-                                  self?.switchToLayout(newLayout)
-                              },
-                              shiftHandler: { [weak self] in
-                                  self?.toggleShift()
-                              },
-                              autoUnshiftHandler: { [weak self] in
-                                  self?.autoUnshift()
-                              },
-                              globeHandler: { [weak self] in
-                                  self?.advanceToNextInputMode()
-                              },
-                              configurationHandler: { [weak self] config in
-                                  self?.handleConfiguration(config)
-                              },
-                              maybePunctuating: maybePunctuating,
-                              autocompleteWordDisabled: autocompleteWordDisabled,
-                              toggleAutocompleteWord: { [weak self] in
-                                  self?.toggleAutocompleteWord()
-                              },
-                              executeActions: { [weak self] actions in
-                                  self?.executeActions(actions)
-                              },
-                              undoActions: undoActions,
-                              clearUndo: { [weak self] in
-                                  self?.clearUndo()
-                              })
+        keyData.key.didTap()
 
         // Provide haptic feedback for each repeat
         HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
@@ -391,7 +361,7 @@ class KeyboardViewController: UIInputViewController {
         return userShiftOverride ? userShiftState : max(appShiftState, userShiftState)
     }
 
-    private func toggleShift() {
+    func toggleShift() {
         if userShiftState == .unshifted && appShiftState != .unshifted {
             // User is toggling override of app's capitalization preference
             userShiftOverride.toggle()
@@ -410,7 +380,7 @@ class KeyboardViewController: UIInputViewController {
         updateKeyboardForShiftChange()
     }
 
-    private func autoUnshift() {
+    func autoUnshift() {
         switch userShiftState {
         case .unshifted:
             break
@@ -460,12 +430,12 @@ class KeyboardViewController: UIInputViewController {
         updateKeyboardForShiftChange()
     }
 
-    private func switchToLayer(_ layer: Layer) {
+    func switchToLayer(_ layer: Layer) {
         currentLayer = layer
         rebuildKeyboard()
     }
 
-    private func switchToLayout(_ layout: KeyboardLayout) {
+    func switchToLayout(_ layout: KeyboardLayout) {
         keyboardLayout = layout
         currentLayer = .alpha
         rebuildKeyboard()
@@ -590,14 +560,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private func setupSuggestionView() {
-        guard let suggestionService = SuggestionService() else {
-            print("KeyboardViewController: Failed to initialize SuggestionService")
-            return
-        }
-        self.suggestionService = suggestionService
         suggestionView = SuggestionView(deviceLayout: deviceLayout)
-
-
         suggestionService.delegate = suggestionView
 
         suggestionView.setOnTypeaheadTapped { [weak self] actions in
@@ -642,7 +605,7 @@ class KeyboardViewController: UIInputViewController {
         maybePunctuating = false
     }
 
-    private func clearUndo() {
+    func clearUndo() {
         undoActions = nil
         keyboardTouchView?.hasUndo = false
         keyboardTouchView?.setNeedsDisplay()
@@ -671,7 +634,7 @@ class KeyboardViewController: UIInputViewController {
         }
     }
 
-    private func executeActions(_ actions: [InputAction]) {
+    func executeActions(_ actions: [InputAction]) {
         var buildingUndoActions: [InputAction] = []
 
         buildingUndoActions.append(.maybePunctuating(maybePunctuating))
@@ -827,7 +790,7 @@ class KeyboardViewController: UIInputViewController {
         suggestionView.setAutocompleteWordDisabled(autocompleteWordDisabled)
     }
 
-    private func handleConfiguration(_ config: Configuration) {
+    func handleConfiguration(_ config: Configuration) {
         switch config {
         case .toggleAutocorrect:
             autocorrectUserDisabled.toggle()
