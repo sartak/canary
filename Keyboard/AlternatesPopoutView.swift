@@ -53,11 +53,11 @@ class AlternatesPopoutView: UIView {
         // Create individual KeyPopoutView-style popouts for each alternate
         // Position them side by side, fanning based on keyboard side
 
-        let keyCenter = CGPoint(x: originalKeyData.frame.midX, y: originalKeyData.frame.midY)
+        let keyCenter = CGPoint(x: originalKeyData.viewFrame.midX, y: originalKeyData.viewFrame.midY)
         let alternateKeyWidth = deviceLayout.alternateKeyWidth
         let popoutTopWidth = deviceLayout.popoutBaseWidth
         let popoutHeight = deviceLayout.popoutHeight
-        let keyWidth = originalKeyData.frame.width
+        let keyWidth = originalKeyData.viewFrame.width
 
         // Calculate total width: first character centered, remaining at alternateKeyWidth intervals
         let totalWidth: CGFloat

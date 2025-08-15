@@ -94,7 +94,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         let location = recognizer.location(in: self)
 
         // Find which key was double-tapped
-        guard let tappedKey = keyData.first(where: { $0.frame.contains(location) }) else {
+        guard let tappedKey = keyData.first(where: { $0.hitbox.contains(location) }) else {
             return
         }
 
@@ -183,7 +183,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             // Only allow double-tap recognizer to receive touches on keys with double-tap behavior
             return keyData.contains { keyData in
                 if keyData.key.doubleTapBehavior != nil {
-                    return keyData.frame.contains(location)
+                    return keyData.hitbox.contains(location)
                 }
                 return false
             }
@@ -206,7 +206,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
 
             // Draw key shadow (only for visible keys, not when pressed)
             if !isPressed && key.key.keyType != .empty {
-                let shadowPath = UIBezierPath(roundedRect: key.frame, cornerRadius: deviceLayout.cornerRadius)
+                let shadowPath = UIBezierPath(roundedRect: key.viewFrame, cornerRadius: deviceLayout.cornerRadius)
                 let context = UIGraphicsGetCurrentContext()
                 context?.saveGState()
                 context?.setShadow(offset: theme.keyShadowOffset, blur: theme.keyShadowRadius, color: theme.keyShadowColor.cgColor)
@@ -216,7 +216,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
             }
 
             // Draw rounded key background
-            let path = UIBezierPath(roundedRect: key.frame, cornerRadius: deviceLayout.cornerRadius)
+            let path = UIBezierPath(roundedRect: key.viewFrame, cornerRadius: deviceLayout.cornerRadius)
             let color = key.key.backgroundColor(shiftState: shiftState, traitCollection: self.traitCollection, tapped: isPressed, isLargeScreen: isLargeScreen)
             color.setFill()
             path.fill()
@@ -240,8 +240,8 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
                     let symbolImage = symbolView.image!
                     let imageSize = symbolImage.size
                     let imageRect = CGRect(
-                        x: key.frame.midX - imageSize.width / 2,
-                        y: key.frame.midY - imageSize.height / 2,
+                        x: key.viewFrame.midX - imageSize.width / 2,
+                        y: key.viewFrame.midY - imageSize.height / 2,
                         width: imageSize.width,
                         height: imageSize.height
                     )
@@ -267,8 +267,8 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
 
             let textSize = text.size(withAttributes: attributes)
             let textRect = CGRect(
-                x: key.frame.midX - textSize.width / 2,
-                y: key.frame.midY - textSize.height / 2,
+                x: key.viewFrame.midX - textSize.width / 2,
+                y: key.viewFrame.midY - textSize.height / 2,
                 width: textSize.width,
                 height: textSize.height
             )

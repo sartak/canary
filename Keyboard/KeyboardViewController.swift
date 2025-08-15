@@ -215,7 +215,8 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
                 let keyData = KeyData(
                     index: startingIndex + keys.count,
                     key: key,
-                    frame: frame
+                    viewFrame: frame,
+                    hitbox: frame
                 )
                 key.delegate = self
                 keys.append(keyData)

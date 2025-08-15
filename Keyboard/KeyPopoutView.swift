@@ -12,7 +12,7 @@ class KeyPopoutView {
         let popoutTopWidth = deviceLayout.popoutBaseWidth
         let popoutHeight = deviceLayout.popoutHeight
         let popoutFontSize = deviceLayout.popoutFontSize
-        let keyWidth = keyData.frame.width
+        let keyWidth = keyData.viewFrame.width
 
         let popout = UIView()
         popout.backgroundColor = .clear
@@ -58,7 +58,7 @@ class KeyPopoutView {
         }
 
         // Position popout above the key (always centered)
-        let keyCenter = CGPoint(x: keyData.frame.midX, y: keyData.frame.midY)
+        let keyCenter = CGPoint(x: keyData.viewFrame.midX, y: keyData.viewFrame.midY)
         let popoutX = keyCenter.x - popoutTopWidth / 2
 
         popout.frame = CGRect(

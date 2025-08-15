@@ -32,7 +32,15 @@ enum Node {
 struct KeyData {
     let index: Int
     let key: Key
-    let frame: CGRect
+    let viewFrame: CGRect      // Visual frame for drawing
+    var hitbox: CGRect         // Touch area frame for hit testing
+
+    init(index: Int, key: Key, viewFrame: CGRect, hitbox: CGRect) {
+        self.index = index
+        self.key = key
+        self.viewFrame = viewFrame
+        self.hitbox = hitbox
+    }
 }
 
 enum KeyboardLayout: Equatable {

@@ -57,7 +57,7 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
 
             let location = touch.location(in: view)
 
-            if let key = keyData.first(where: { $0.frame.contains(location) }) {
+            if let key = keyData.first(where: { $0.hitbox.contains(location) }) {
                 touchQueue.append((touch, key))
                 pressedKeys.insert(key.index)
                 onKeyTouchDown?(key)
