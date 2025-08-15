@@ -196,18 +196,45 @@ class SuggestionService {
             return word.uppercased()
         }
 
-        // If user input is all lowercase, check shift state for capitalization
+        // If user input is all lowercase, apply shift state only to untyped portions
         if userPattern.lowercased() == userPattern {
-            switch shiftState {
-            case .shifted:
-                // Auto-shift is active, capitalize first letter only
-                return word.prefix(1).uppercased() + word.dropFirst()
-            case .unshifted:
-                // Keep corpus capitalization
-                return word
-            case .capsLock:
-                // Already handled above
-                return word.uppercased()
+            let prefixLength = userPrefix.count
+            let suffixLength = userSuffix.count
+            let totalTypedLength = prefixLength + suffixLength
+
+            // If entire word is typed, keep user's actual case
+            if totalTypedLength >= word.count {
+                switch shiftState {
+                case .shifted:
+                    // Only capitalize if this would be the first character
+                    if prefixLength == 0 {
+                        return word.prefix(1).uppercased() + word.dropFirst()
+                    }
+                    return word
+                case .unshifted:
+                    return word
+                case .capsLock:
+                    return word.uppercased()
+                }
+            } else {
+                // Apply shift state only to untyped middle portion
+                var result = word
+                let middleEnd = word.count - suffixLength
+
+                switch shiftState {
+                case .shifted:
+                    // Capitalize first untyped character if it's at the beginning
+                    if prefixLength == 0 && middleEnd > 0 {
+                        result = String(result.prefix(1)).uppercased() + String(result.dropFirst())
+                    }
+                case .unshifted:
+                    // Keep corpus capitalization for untyped portion
+                    break
+                case .capsLock:
+                    return word.uppercased()
+                }
+
+                return result
             }
         }
 
