@@ -209,7 +209,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         var xOffset: CGFloat = rowStartX
         var keys: [KeyData] = []
 
-        for node in row {
+        for (nodeIndex, node) in row.enumerated() {
             switch node {
             case .key(let key, let keyWidth):
                 let frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: deviceLayout.keyHeight)
@@ -222,11 +222,48 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
                     debugColor = keys.count % 2 == 0 ? UIColor.green.withAlphaComponent(0.4) : UIColor.purple.withAlphaComponent(0.4)
                 }
 
+                let prevNode = row.indices.contains(nodeIndex - 1) ? row[nodeIndex - 1] : nil
+                let nextNode = row.indices.contains(nodeIndex + 1) ? row[nodeIndex + 1] : nil
+
+                let leftPadding: CGFloat
+                switch prevNode {
+                case .gap(let gapWidth):
+                    leftPadding = gapWidth / 2
+                case .split(let splitWidth):
+                    leftPadding = splitWidth / 2
+                case .key:
+                    leftPadding = 0.0
+                case nil:
+                    leftPadding = deviceLayout.horizontalGap
+                }
+
+                let rightPadding: CGFloat
+                switch nextNode {
+                case .gap(let gapWidth):
+                    rightPadding = gapWidth / 2
+                case .split(let splitWidth):
+                    rightPadding = splitWidth / 2
+                case .key:
+                    rightPadding = 0.0
+                case nil:
+                    rightPadding = deviceLayout.horizontalGap
+                }
+
+                let topPadding = deviceLayout.verticalGap / 2
+                let bottomPadding = deviceLayout.verticalGap / 2
+
+                let hitbox = CGRect(
+                    x: frame.origin.x - leftPadding,
+                    y: frame.origin.y - topPadding,
+                    width: frame.width + leftPadding + rightPadding,
+                    height: frame.height + topPadding + bottomPadding
+                )
+
                 let keyData = KeyData(
                     index: startingIndex + keys.count,
                     key: key,
                     viewFrame: frame,
-                    hitbox: frame,
+                    hitbox: hitbox,
                     debugColor: debugColor
                 )
                 key.delegate = self
@@ -463,7 +500,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
 
         UIView.performWithoutAnimation {
             view.addSubview(editingBarView)
-            editingBarView.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: deviceLayout.topPadding)
+            editingBarView.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: deviceLayout.topPadding - deviceLayout.verticalGap / 2)
             editingBarView.updateLayout(for: effectiveShiftState(), containerWidth: view.bounds.width)
         }
     }
@@ -485,9 +522,8 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         view.addSubview(suggestionView)
         suggestionView.setDebugVisualizationEnabled(debugVisualizationEnabled)
 
-        // Position the suggestion view to use the full topPadding height
         let suggestionY: CGFloat = 0
-        let suggestionHeight = deviceLayout.topPadding
+        let suggestionHeight = deviceLayout.topPadding - deviceLayout.verticalGap / 2
 
         // Calculate available space for suggestions
         let containerWidth = view.bounds.width

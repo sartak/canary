@@ -223,7 +223,13 @@ enum KeyboardLayout: Equatable {
                 let leftGap = firstRowLeftWidth - bottomRowLeftWidth
                 let rightGap = firstRowRightWidth - bottomRowRightWidth
 
-                return [.gap(max(0, leftGap))] + nodeRow + [.gap(max(0, rightGap))]
+                // Create dual gaps: inner constant gap + outer remaining gap
+                let leftInnerGap = 2 * layout.horizontalGap
+                let leftOuterGap = max(0, leftGap - leftInnerGap)
+                let rightInnerGap = 2 * layout.horizontalGap
+                let rightOuterGap = max(0, rightGap - rightInnerGap)
+
+                return [.gap(leftOuterGap), .gap(leftInnerGap)] + nodeRow + [.gap(rightInnerGap), .gap(rightOuterGap)]
             }
             return nodeRow
         }

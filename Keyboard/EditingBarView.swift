@@ -76,7 +76,7 @@ class EditingBarView: UIView {
 
     func updateLayout(for shiftState: ShiftState, containerWidth: CGFloat) {
         let rightOffset = calculateDismissButtonOffset(for: shiftState, containerWidth: containerWidth)
-        let buttonY = (deviceLayout.topPadding - deviceLayout.editingButtonSize) / 2
+        let buttonY = (frame.height - deviceLayout.editingButtonSize) / 2
 
         // Position dismiss button
         let dismissX = containerWidth - rightOffset - deviceLayout.editingButtonSize
