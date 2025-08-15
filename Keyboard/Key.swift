@@ -102,6 +102,13 @@ class Key {
         return !(text.count == 1 && noTrailingSpaceCharacters.contains(text.first!))
     }
 
+    var simpleCharacter: Character? {
+        if case .simple(let text) = keyType, text.count == 1 {
+            return text.first
+        }
+        return nil
+    }
+
     static func shouldTriggerAutocorrect(_ text: String) -> Bool {
         // Trigger autocorrect for punctuation that ends words, but not for apostrophe
         // since apostrophe may be part of contractions that aren't complete yet

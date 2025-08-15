@@ -90,7 +90,7 @@
 ### Context-Aware Tuning
 - [x] Implement smart backspace (context-aware undo)
 - [x] Implement smart shifting
-- [ ] Adjust key touch areas based on next letter probability
+- [x] Adjust key touch areas based on next letter probability
 
 ## Milestone 8: Swipe-to-Type Foundation
 **Goal**: Basic gesture recognition for swipe typing

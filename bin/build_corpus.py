@@ -8,9 +8,32 @@ to corpus/words.txt and creates Keyboard/words.db with populated tables.
 """
 
 import os
+import re
 import sqlite3
 import sys
+from collections import Counter
 from typing import Dict, Set, List, Tuple, Optional
+
+
+def process_big_txt(filepath: str) -> tuple[Counter, Counter]:
+    """Load corpus/big.txt and process each \\S+ word. Count frequency of first letters and all letters."""
+    first_letter_counts = Counter()
+    general_letter_counts = Counter()
+    with open(filepath, 'r', encoding='utf-8') as f:
+        text = f.read()
+        # Find all non-whitespace sequences
+        words = re.findall(r'\S+', text)
+        for word in words:
+            # Lowercase and strip non a-z characters
+            processed_word = re.sub(r'[^a-z]', '', word.lower())
+            if processed_word:  # Only count non-empty words
+                # Count first letter
+                first_letter = processed_word[0]
+                first_letter_counts[first_letter] += 1
+                # Count all letters
+                for letter in processed_word:
+                    general_letter_counts[letter] += 1
+    return first_letter_counts, general_letter_counts
 
 
 def load_legitimate_words(filepath: str) -> Set[str]:
@@ -155,6 +178,14 @@ def create_database_tables(conn: sqlite3.Connection):
         ) WITHOUT ROWID
     ''')
 
+    # Key-value table for storing distributions and other data
+    conn.execute('''
+        CREATE TABLE kv (
+            key TEXT NOT NULL PRIMARY KEY,
+            value TEXT NOT NULL
+        ) WITHOUT ROWID
+    ''')
+
     # Covering index for eliminating JOIN - everything needed is in the index
     conn.execute('CREATE INDEX idx_symspell_covering ON symspell_deletes (delete_hash, frequency_rank, word)')
 
@@ -225,6 +256,35 @@ def populate_database(conn: sqlite3.Connection, filtered_words: List[Tuple[str, 
     print(f"Populated database with {len(words_data)} words")
 
 
+def populate_kv_table(conn: sqlite3.Connection):
+    """Populate the kv table with initial and general letter distributions from big.txt."""
+    print("Processing big.txt for letter distributions...")
+    first_letter_counts, general_letter_counts = process_big_txt('corpus/big.txt')
+
+    # Create ordered list of initial letter counts for a-z
+    initial_values = []
+    for letter in 'abcdefghijklmnopqrstuvwxyz':
+        count = first_letter_counts.get(letter, 0)
+        initial_values.append(str(count))
+
+    # Create ordered list of general letter counts for a-z
+    general_values = []
+    for letter in 'abcdefghijklmnopqrstuvwxyz':
+        count = general_letter_counts.get(letter, 0)
+        general_values.append(str(count))
+
+    # Insert both distributions into kv table
+    initial_csv = ','.join(initial_values)
+    general_csv = ','.join(general_values)
+
+    conn.execute('INSERT INTO kv (key, value) VALUES (?, ?)', ('initial_distribution', initial_csv))
+    conn.execute('INSERT INTO kv (key, value) VALUES (?, ?)', ('general_distribution', general_csv))
+    conn.commit()
+
+    print(f"Stored initial letter distribution: {initial_csv}")
+    print(f"Stored general letter distribution: {general_csv}")
+
+
 def build_filtered_corpus():
     """Build filtered corpus and write to words.txt and database."""
     print("Loading legitimate words...")
@@ -270,6 +330,7 @@ def build_filtered_corpus():
         populate_database(conn, filtered_words, hidden_words)
         populate_prefixes_table(conn, filtered_words, hidden_words)
         populate_symspell_tables(conn, filtered_words, hidden_words)
+        populate_kv_table(conn)
 
     finally:
         conn.close()

@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 
 protocol SuggestionServiceDelegate: AnyObject {
-    func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?)
+    func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?, frequencies: CharacterDistribution)
 }
 
 enum InputAction {
@@ -20,6 +20,7 @@ class SuggestionService {
     private var selectedText: String?
 
     private var typeaheadService: TypeaheadService
+    private var frequencyService: FrequencyService
 
     private var autocorrectService: AutocorrectService
     private let db: OpaquePointer
@@ -50,9 +51,11 @@ class SuggestionService {
             sqlite3_close(db)
             return nil
         }
+        let frequencyService = FrequencyService(db: db)
 
         self.autocorrectService = autocorrectService
         self.typeaheadService = typeaheadService
+        self.frequencyService = frequencyService
     }
 
     deinit {
@@ -65,6 +68,8 @@ class SuggestionService {
         self.selectedText = selected
 
         let (prefix, suffix) = extractCurrentWordContext()
+
+        let frequencies = frequencyService.updateFrequencies(prefix: prefix, suffix: suffix)
 
         let (typeahead, exactMatch) = updateTypeahead(prefix: prefix, suffix: suffix, shiftState: shiftState)
 
@@ -89,7 +94,7 @@ class SuggestionService {
             typeahead
         }
 
-        delegate?.suggestionService(self, didUpdateSuggestions: filteredTypeahead, autocorrect: autocorrectSuggestion)
+        delegate?.suggestionService(self, didUpdateSuggestions: filteredTypeahead, autocorrect: autocorrectSuggestion, frequencies: frequencies)
     }
 
     private func updateAutocorrect(prefix: String, suffix: String, autocorrectEnabled: Bool = true, shiftState: ShiftState) -> String? {

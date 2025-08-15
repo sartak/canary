@@ -9,7 +9,7 @@ import UIKit
 
 private let largeScreenWidth: CGFloat = 600
 
-class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingBarViewDelegate {
+class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingBarViewDelegate, SuggestionServiceDelegate {
     private var currentLayer: Layer = .alpha
     private var userShiftState: ShiftState = .unshifted
     private var appShiftState: ShiftState = .unshifted
@@ -30,6 +30,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
     var autocorrectWordDisabled = false
     var undoActions: [InputAction]?
     private var debugVisualizationEnabled = false
+    private var characterFrequencies: CharacterDistribution?
 
     // Expose autocorrect state for testing/debugging
     var isAutocorrectEnabled: Bool {
@@ -204,6 +205,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
     }
 
     private func calculateKeyHitbox(key: Key, frame: CGRect, prevNode: Node?, nextNode: Node?, allRows: [[Node]], currentRow: Int, currentNode: Int) -> CGRect {
+        let hitboxOverage: CGFloat = 0.2
         let leftPadding: CGFloat
         if currentNode == 0 {
             leftPadding = deviceLayout.horizontalGap
@@ -229,13 +231,14 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
             }
 
             // Check if both current and left key are simple
-            if case .simple(_) = key.keyType,
+            if let currentChar = key.simpleCharacter,
                let leftKey = leftKey,
-               case .simple(_) = leftKey.keyType {
-                // TODO
+               let leftChar = leftKey.simpleCharacter,
+               let frequencies = characterFrequencies {
+                ratio = frequencies.frequencyRatio(currentChar, leftChar)
             }
 
-            leftPadding = totalWidth * ratio
+            leftPadding = totalWidth * (ratio * (1.0 + 2.0 * hitboxOverage) - hitboxOverage)
         }
 
         let rightPadding: CGFloat
@@ -263,36 +266,38 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
             }
 
             // Check if both current and right key are simple
-            if case .simple(_) = key.keyType,
+            if let currentChar = key.simpleCharacter,
                let rightKey = rightKey,
-               case .simple(_) = rightKey.keyType {
-                // TODO
+               let rightChar = rightKey.simpleCharacter,
+               let frequencies = characterFrequencies {
+                ratio = frequencies.frequencyRatio(currentChar, rightChar)
             }
 
-            rightPadding = totalWidth * ratio
+            rightPadding = totalWidth * (ratio * (1.0 + 2.0 * hitboxOverage) - hitboxOverage)
         }
 
         var aboveRatio = 0.5
         var belowRatio = 0.5
 
-        if case .simple(_) = key.keyType {
+        if let currentChar = key.simpleCharacter,
+           let frequencies = characterFrequencies {
             if currentRow > 0 && currentNode < allRows[currentRow - 1].count {
                 if case .key(let aboveKey, _) = allRows[currentRow - 1][currentNode],
-                   case .simple(_) = aboveKey.keyType {
-                    // TODO
+                   let aboveChar = aboveKey.simpleCharacter {
+                    aboveRatio = frequencies.frequencyRatio(currentChar, aboveChar)
                 }
             }
 
             if currentRow < allRows.count - 1 && currentNode < allRows[currentRow + 1].count {
                 if case .key(let belowKey, _) = allRows[currentRow + 1][currentNode],
-                   case .simple(_) = belowKey.keyType {
-                    // TODO
+                   let belowChar = belowKey.simpleCharacter {
+                    belowRatio = frequencies.frequencyRatio(currentChar, belowChar)
                 }
             }
         }
 
-        let topPadding = deviceLayout.verticalGap * aboveRatio
-        let bottomPadding = deviceLayout.verticalGap * belowRatio
+        let topPadding = deviceLayout.verticalGap * (aboveRatio * (1.0 + 2.0 * hitboxOverage) - hitboxOverage)
+        let bottomPadding = deviceLayout.verticalGap * (belowRatio * (1.0 + 2.0 * hitboxOverage) - hitboxOverage)
 
         return CGRect(
             x: frame.origin.x - leftPadding,
@@ -575,7 +580,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
 
     private func setupSuggestionView() {
         suggestionView = SuggestionView(deviceLayout: deviceLayout)
-        suggestionService.delegate = suggestionView
+        suggestionService.delegate = self
 
         suggestionView.setOnTypeaheadTapped { [weak self] actions in
             self?.executeActions(actions)
@@ -783,6 +788,60 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
             suggestionView?.setDebugVisualizationEnabled(debugVisualizationEnabled)
             keyboardTouchView?.setNeedsDisplay()
         }
+    }
+
+    private func updateKeyHitboxes() {
+        let isShifted: Bool
+        switch effectiveShiftState() {
+        case .unshifted:
+            isShifted = false
+        case .shifted, .capsLock:
+            isShifted = true
+        }
+        let allRows = keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe)
+
+        for (keyIndex, keyData) in keyboardTouchView.keyData.enumerated() {
+            // Find the row and node indices for this key
+            var currentRow = 0
+            var currentNode = 0
+            var keysProcessed = 0
+
+            outerLoop: for (rowIndex, row) in allRows.enumerated() {
+                for (nodeIndex, node) in row.enumerated() {
+                    if case .key(_, _) = node {
+                        if keysProcessed == keyIndex {
+                            currentRow = rowIndex
+                            currentNode = nodeIndex
+                            break outerLoop
+                        }
+                        keysProcessed += 1
+                    }
+                }
+            }
+
+            let prevNode = currentNode > 0 ? allRows[currentRow][currentNode - 1] : nil
+            let nextNode = currentNode < allRows[currentRow].count - 1 ? allRows[currentRow][currentNode + 1] : nil
+
+            keyboardTouchView.keyData[keyIndex].hitbox = calculateKeyHitbox(
+                key: keyData.key,
+                frame: keyData.viewFrame,
+                prevNode: prevNode,
+                nextNode: nextNode,
+                allRows: allRows,
+                currentRow: currentRow,
+                currentNode: currentNode
+            )
+        }
+
+        keyboardTouchView.setNeedsDisplay()
+    }
+
+    // MARK: - SuggestionServiceDelegate
+
+    func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?, frequencies: CharacterDistribution) {
+        characterFrequencies = frequencies
+        updateKeyHitboxes()
+        suggestionView.suggestionService(service, didUpdateSuggestions: typeahead, autocorrect: autocorrect, frequencies: frequencies)
     }
 
     // MARK: - EditingBarViewDelegate

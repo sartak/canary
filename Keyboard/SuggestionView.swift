@@ -1,6 +1,6 @@
 import UIKit
 
-class SuggestionView: UIView, SuggestionServiceDelegate {
+class SuggestionView: UIView {
     private var deviceLayout: DeviceLayout
 
     private var typeaheads: [(String, [InputAction])] = []
@@ -144,9 +144,7 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         layoutSuggestions()
     }
 
-    // MARK: - SuggestionServiceDelegate
-
-    func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?) {
+    func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?, frequencies: CharacterDistribution) {
         self.typeaheads = typeahead
         self.autocorrectWord = autocorrect
         layoutSuggestions()
