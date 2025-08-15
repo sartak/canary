@@ -249,17 +249,6 @@ class SuggestionService {
         return result
     }
 
-    private func shouldAddLeadingSpace() -> Bool {
-        guard let before = contextBefore, !before.isEmpty else {
-            return false
-        }
-
-        let lastChar = before.last!
-
-        // Add space after letters or punctuation that typically needs space after it
-        return lastChar.isLetter || ".,!?:;".contains(lastChar)
-    }
-
     static func isWordCharacter(in text: String, at index: String.Index) -> Bool {
         let char = text[index]
 
@@ -362,10 +351,7 @@ class SuggestionService {
             actions.append(.insert(insertText))
             addTrailingSpace = false
         } else {
-            if shouldAddLeadingSpace() {
-                actions.append(.insert(" "))
-            }
-            actions.append(.insert(remainingWord))
+            addTrailingSpace = false
         }
 
         if addTrailingSpace {
