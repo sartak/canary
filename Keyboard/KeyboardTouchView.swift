@@ -9,12 +9,8 @@ import UIKit
 
 private let largeScreenWidth: CGFloat = 600
 
-class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
-    var keyData: [KeyData] = [] {
-        didSet {
-            gestureRecognizer?.keyData = keyData
-        }
-    }
+class KeyboardTouchView: UIView, UIGestureRecognizerDelegate, MultiTouchKeyboardGestureRecognizerDelegate {
+    var keyData: [KeyData] = []
     var shiftState: ShiftState = .unshifted
     var deviceLayout: DeviceLayout!
     var autocorrectEnabled: Bool = true
@@ -67,6 +63,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         // Create and configure gesture recognizer
         gestureRecognizer = MultiTouchKeyboardGestureRecognizer(target: self, action: #selector(handleGesture(_:)))
         gestureRecognizer.delegate = self
+        gestureRecognizer.hitTestDelegate = self
         addGestureRecognizer(gestureRecognizer)
 
         // Create double-tap recognizer once
@@ -96,7 +93,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         let location = recognizer.location(in: self)
 
         // Find which key was double-tapped
-        guard let tappedKey = keyData.first(where: { $0.hitbox.contains(location) }) else {
+        guard let tappedKey = key(at: location) else {
             return
         }
 
@@ -162,6 +159,15 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
         return alternatesPopup != nil
     }
 
+    private func key(at location: CGPoint) -> KeyData? {
+        return keyData.first(where: { $0.hitbox.contains(location) })
+    }
+
+    // MARK: - MultiTouchKeyboardGestureRecognizerDelegate
+
+    func gestureRecognizer(_ gestureRecognizer: MultiTouchKeyboardGestureRecognizer, keyAt location: CGPoint) -> KeyData? {
+        return key(at: location)
+    }
 
     // MARK: - UIGestureRecognizerDelegate
 
@@ -183,12 +189,10 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
 
         if gestureRecognizer is UITapGestureRecognizer {
             // Only allow double-tap recognizer to receive touches on keys with double-tap behavior
-            return keyData.contains { keyData in
-                if keyData.key.doubleTapBehavior != nil {
-                    return keyData.hitbox.contains(location)
-                }
-                return false
+            if let tappedKey = key(at: location) {
+                return tappedKey.key.doubleTapBehavior != nil
             }
+            return false
         }
 
         return true

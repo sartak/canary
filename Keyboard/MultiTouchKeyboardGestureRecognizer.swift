@@ -7,8 +7,12 @@
 
 import UIKit
 
+protocol MultiTouchKeyboardGestureRecognizerDelegate: AnyObject {
+    func gestureRecognizer(_ gestureRecognizer: MultiTouchKeyboardGestureRecognizer, keyAt location: CGPoint) -> KeyData?
+}
+
 class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
-    var keyData: [KeyData] = []
+    weak var hitTestDelegate: MultiTouchKeyboardGestureRecognizerDelegate?
     var onKeyTouchDown: ((KeyData) -> Void)?
     var onKeyTouchUp: ((KeyData) -> Void)?
     var onKeyLongPress: ((KeyData) -> Void)?
@@ -57,7 +61,7 @@ class MultiTouchKeyboardGestureRecognizer: UIGestureRecognizer {
 
             let location = touch.location(in: view)
 
-            if let key = keyData.first(where: { $0.hitbox.contains(location) }) {
+            if let key = hitTestDelegate?.gestureRecognizer(self, keyAt: location) {
                 touchQueue.append((touch, key))
                 pressedKeys.insert(key.index)
                 onKeyTouchDown?(key)
