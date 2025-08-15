@@ -8,9 +8,8 @@
 import UIKit
 
 private let largeScreenWidth: CGFloat = 600
-private let dismissButtonSize: CGFloat = 24
 
-class KeyboardViewController: UIInputViewController, KeyActionDelegate {
+class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingBarViewDelegate {
     private var currentLayer: Layer = .alpha
     private var userShiftState: ShiftState = .unshifted
     private var appShiftState: ShiftState = .unshifted
@@ -21,10 +20,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
     private var keyboardLayout: KeyboardLayout = .canary
     private var needsGlobe: Bool = false
     private var keyPopouts: [Int: UIView] = [:]
-    private var dismissButton: UIButton!
-    private var cutButton: UIButton!
-    private var copyButton: UIButton!
-    private var pasteButton: UIButton!
+    private var editingBarView: EditingBarView!
     private var suggestionView: SuggestionView!
     var suggestionService: SuggestionService = SuggestionService()!
     private var pendingRefresh = false
@@ -179,8 +175,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
             heightConstraint?.priority = UILayoutPriority(999)
             view.addConstraint(heightConstraint!)
 
-            setupDismissButton()
-            setupEditingButtons()
+            setupEditingBar()
             setupSuggestionView()
         }
     }
@@ -441,121 +436,20 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
         rebuildKeyboard()
     }
 
-    private func setupDismissButton() {
-        dismissButton = UIButton(type: .system)
-        dismissButton.setTitle("", for: .normal)
+    private func setupEditingBar() {
+        editingBarView = EditingBarView(
+            deviceLayout: deviceLayout,
+            keyboardLayout: keyboardLayout,
+            currentLayer: currentLayer,
+            needsGlobe: needsGlobe
+        )
 
-        let theme = ColorTheme.current(for: traitCollection)
-        dismissButton.tintColor = theme.decorationColor
-
-        // Create downward chevron using SF Symbols
-        let chevronConfig = UIImage.SymbolConfiguration(pointSize: deviceLayout.editingButtonSize, weight: .light, scale: .default)
-        let chevronImage = UIImage(systemName: "chevron.down", withConfiguration: chevronConfig)
-        dismissButton.setImage(chevronImage, for: .normal)
-
-        dismissButton.addTarget(self, action: #selector(handleDismissButton), for: .touchUpInside)
+        editingBarView.delegate = self
 
         UIView.performWithoutAnimation {
-            view.addSubview(dismissButton)
-
-            // Position the button appropriately for each layout
-            let containerWidth = view.bounds.width
-            let rightOffset = calculateDismissButtonOffset()
-            let buttonX = containerWidth - rightOffset - dismissButtonSize
-            let buttonY = (deviceLayout.topPadding - dismissButtonSize) / 2
-
-            dismissButton.frame = CGRect(x: buttonX, y: buttonY, width: dismissButtonSize, height: dismissButtonSize)
-        }
-    }
-
-    private func calculateDismissButtonOffset() -> CGFloat {
-        let containerWidth = view.bounds.width
-        let isShifted: Bool
-        switch effectiveShiftState() {
-        case .unshifted:
-            isShifted = false
-        case .shifted, .capsLock:
-            isShifted = true
-        }
-        let firstRow = keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe)[0]
-        let rowWidth = Node.calculateRowWidth(for: firstRow)
-        let rowStartX = (containerWidth - rowWidth) / 2
-
-        // Find the rightmost key in the first row
-        var rightmostKeyX: CGFloat = 0
-        var rightmostKeyWidth: CGFloat = 0
-        var xOffset = rowStartX
-
-        for node in firstRow {
-            switch node {
-            case .key(_, let keyWidth):
-                rightmostKeyX = xOffset
-                rightmostKeyWidth = keyWidth
-                xOffset += keyWidth
-            case .gap(let gapWidth):
-                xOffset += gapWidth
-            case .split(let splitWidth):
-                xOffset += splitWidth
-            }
-        }
-
-        // Center the dismiss button above the rightmost key
-        let rightmostKeyCenterX = rightmostKeyX + rightmostKeyWidth / 2
-        return containerWidth - rightmostKeyCenterX - dismissButtonSize / 2
-    }
-
-    @objc private func handleDismissButton() {
-        dismissKeyboard()
-    }
-
-    private func setupEditingButtons() {
-        let theme = ColorTheme.current(for: traitCollection)
-        let buttonConfig = UIImage.SymbolConfiguration(pointSize: deviceLayout.editingButtonSize, weight: .light, scale: .default)
-
-        // Create cut button
-        cutButton = UIButton(type: .system)
-        cutButton.tintColor = theme.decorationColor
-        let cutImage = UIImage(systemName: "scissors", withConfiguration: buttonConfig)
-        cutButton.setImage(cutImage, for: .normal)
-        cutButton.addTarget(self, action: #selector(handleCutButton), for: .touchUpInside)
-
-        // Create copy button
-        copyButton = UIButton(type: .system)
-        copyButton.tintColor = theme.decorationColor
-        let copyImage = UIImage(systemName: "doc.on.doc", withConfiguration: buttonConfig)
-        copyButton.setImage(copyImage, for: .normal)
-        copyButton.addTarget(self, action: #selector(handleCopyButton), for: .touchUpInside)
-
-        // Create paste button
-        pasteButton = UIButton(type: .system)
-        pasteButton.tintColor = theme.decorationColor
-        let pasteImage = UIImage(systemName: "doc.on.clipboard", withConfiguration: buttonConfig)
-        pasteButton.setImage(pasteImage, for: .normal)
-        pasteButton.addTarget(self, action: #selector(handlePasteButton), for: .touchUpInside)
-
-        UIView.performWithoutAnimation {
-            view.addSubview(cutButton)
-            view.addSubview(copyButton)
-            view.addSubview(pasteButton)
-
-            // Calculate button positions explicitly
-            let containerWidth = view.bounds.width
-            let dismissRightOffset = calculateDismissButtonOffset()
-            let buttonSpacing = deviceLayout.editingButtonSpacing
-            let buttonY = (deviceLayout.topPadding - dismissButtonSize) / 2
-            let buttonSize = dismissButtonSize
-
-            // Paste button (leftmost of the three)
-            let pasteX = containerWidth - (dismissRightOffset + buttonSize + buttonSpacing + buttonSize)
-            pasteButton.frame = CGRect(x: pasteX, y: buttonY, width: buttonSize, height: buttonSize)
-
-            // Copy button (middle)
-            let copyX = pasteX - buttonSpacing - buttonSize
-            copyButton.frame = CGRect(x: copyX, y: buttonY, width: buttonSize, height: buttonSize)
-
-            // Cut button (leftmost)
-            let cutX = copyX - buttonSpacing - buttonSize
-            cutButton.frame = CGRect(x: cutX, y: buttonY, width: buttonSize, height: buttonSize)
+            view.addSubview(editingBarView)
+            editingBarView.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: deviceLayout.topPadding)
+            editingBarView.updateLayout(for: effectiveShiftState(), containerWidth: view.bounds.width)
         }
     }
 
@@ -579,26 +473,11 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
         let suggestionY: CGFloat = 0
         let suggestionHeight = deviceLayout.topPadding
 
-        // Calculate available space for suggestions (left side of editing buttons)
+        // Calculate available space for suggestions
         let containerWidth = view.bounds.width
-        let dismissRightOffset = calculateDismissButtonOffset()
-        let editingButtonsWidth = dismissButtonSize * 4 + deviceLayout.editingButtonSpacing * 3 // 4 buttons + 3 gaps
+        let suggestionArea = editingBarView.calculateSuggestionArea(for: effectiveShiftState(), containerWidth: containerWidth)
 
-        // Align with the left edge of the first column of keys
-        let isShifted: Bool
-        switch effectiveShiftState() {
-        case .unshifted:
-            isShifted = false
-        case .shifted, .capsLock:
-            isShifted = true
-        }
-        let firstRow = keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe)[0]
-        let rowWidth = Node.calculateRowWidth(for: firstRow)
-        let suggestionX = (containerWidth - rowWidth) / 2
-
-        let availableWidth = containerWidth - dismissRightOffset - editingButtonsWidth - suggestionX - deviceLayout.suggestionGap
-
-        suggestionView.frame = CGRect(x: suggestionX, y: suggestionY, width: availableWidth, height: suggestionHeight)
+        suggestionView.frame = CGRect(x: suggestionArea.x, y: suggestionY, width: suggestionArea.width, height: suggestionHeight)
     }
 
     private func resetMaybePunctuating() {
@@ -675,29 +554,6 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
         keyboardTouchView?.setNeedsDisplay()
     }
 
-    @objc private func handleCutButton() {
-        // For cut: copy selected text then delete it
-        if let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty {
-            UIPasteboard.general.string = selectedText
-            textDocumentProxy.deleteBackward()
-            handleTextChange()
-        }
-    }
-
-    @objc private func handleCopyButton() {
-        // Copy selected text to pasteboard
-        if let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty {
-            UIPasteboard.general.string = selectedText
-        }
-    }
-
-    @objc private func handlePasteButton() {
-        // Paste text from pasteboard
-        if let pasteText = UIPasteboard.general.string {
-            textDocumentProxy.insertText(pasteText)
-            handleTextChange()
-        }
-    }
 
     private func updateKeyboardForShiftChange() {
         let effectiveShiftState = effectiveShiftState()
@@ -713,6 +569,8 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
         keyboardTouchView.hasUndo = undoActions != nil
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
+
+        editingBarView.updateLayout(for: effectiveShiftState, containerWidth: view.bounds.width)
     }
 
     private func rebuildKeyboard() {
@@ -797,6 +655,33 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
             keyboardTouchView?.autocorrectEnabled = !autocorrectUserDisabled
             keyboardTouchView?.setNeedsDisplay()
             refreshSuggestions()
+        }
+    }
+
+    // MARK: - EditingBarViewDelegate
+
+    func editingBarDismiss() {
+        dismissKeyboard()
+    }
+
+    func editingBarCut() {
+        if let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty {
+            UIPasteboard.general.string = selectedText
+            textDocumentProxy.deleteBackward()
+            handleTextChange()
+        }
+    }
+
+    func editingBarCopy() {
+        if let selectedText = textDocumentProxy.selectedText, !selectedText.isEmpty {
+            UIPasteboard.general.string = selectedText
+        }
+    }
+
+    func editingBarPaste() {
+        if let pasteText = UIPasteboard.general.string {
+            textDocumentProxy.insertText(pasteText)
+            handleTextChange()
         }
     }
 }
