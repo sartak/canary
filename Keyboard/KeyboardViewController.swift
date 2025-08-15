@@ -193,8 +193,9 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         case .shifted, .capsLock:
             isShifted = true
         }
-        for (rowIndex, row) in keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe).enumerated() {
-            let rowKeys = createRowKeyData(for: row, rowIndex: rowIndex, yOffset: yOffset, startingIndex: keys.count)
+        let allRows = keyboardLayout.nodeRows(for: currentLayer, shifted: isShifted, layout: deviceLayout, needsGlobe: needsGlobe)
+        for (rowIndex, row) in allRows.enumerated() {
+            let rowKeys = createRowKeyData(for: row, rowIndex: rowIndex, yOffset: yOffset, startingIndex: keys.count, allRows: allRows)
             keys.append(contentsOf: rowKeys)
             yOffset += deviceLayout.keyHeight + deviceLayout.verticalGap
         }
@@ -202,7 +203,106 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         return keys
     }
 
-    private func createRowKeyData(for row: [Node], rowIndex: Int, yOffset: CGFloat, startingIndex: Int) -> [KeyData] {
+    private func calculateKeyHitbox(key: Key, frame: CGRect, prevNode: Node?, nextNode: Node?, allRows: [[Node]], currentRow: Int, currentNode: Int) -> CGRect {
+        let leftPadding: CGFloat
+        if currentNode == 0 {
+            leftPadding = deviceLayout.horizontalGap
+        } else {
+            var totalWidth: CGFloat = 0
+            var nodeIndex = currentNode - 1
+            let currentRowNodes = allRows[currentRow]
+            var ratio = 0.5
+            var leftKey: Key?
+
+            leftLoop: while nodeIndex >= 0 {
+                let node = currentRowNodes[nodeIndex]
+                switch node {
+                case .gap(let gapWidth):
+                    totalWidth += gapWidth
+                case .split(let splitWidth):
+                    totalWidth += splitWidth
+                case .key(let foundKey, _):
+                    leftKey = foundKey
+                    break leftLoop
+                }
+                nodeIndex -= 1
+            }
+
+            // Check if both current and left key are simple
+            if case .simple(_) = key.keyType,
+               let leftKey = leftKey,
+               case .simple(_) = leftKey.keyType {
+                // TODO
+            }
+
+            leftPadding = totalWidth * ratio
+        }
+
+        let rightPadding: CGFloat
+        let currentRowNodes = allRows[currentRow]
+        if currentNode == currentRowNodes.count - 1 {
+            rightPadding = deviceLayout.horizontalGap
+        } else {
+            var totalWidth: CGFloat = 0
+            var nodeIndex = currentNode + 1
+            var ratio = 0.5
+            var rightKey: Key?
+
+            rightLoop: while nodeIndex < currentRowNodes.count {
+                let node = currentRowNodes[nodeIndex]
+                switch node {
+                case .gap(let gapWidth):
+                    totalWidth += gapWidth
+                case .split(let splitWidth):
+                    totalWidth += splitWidth
+                case .key(let foundKey, _):
+                    rightKey = foundKey
+                    break rightLoop
+                }
+                nodeIndex += 1
+            }
+
+            // Check if both current and right key are simple
+            if case .simple(_) = key.keyType,
+               let rightKey = rightKey,
+               case .simple(_) = rightKey.keyType {
+                // TODO
+            }
+
+            rightPadding = totalWidth * ratio
+        }
+
+        var aboveRatio = 0.5
+        var belowRatio = 0.5
+
+        if case .simple(_) = key.keyType {
+            if currentRow > 0 && currentNode < allRows[currentRow - 1].count {
+                if case .key(let aboveKey, _) = allRows[currentRow - 1][currentNode],
+                   case .simple(_) = aboveKey.keyType {
+                    // TODO
+                }
+            }
+
+            if currentRow < allRows.count - 1 && currentNode < allRows[currentRow + 1].count {
+                if case .key(let belowKey, _) = allRows[currentRow + 1][currentNode],
+                   case .simple(_) = belowKey.keyType {
+                    // TODO
+                }
+            }
+        }
+
+        let topPadding = deviceLayout.verticalGap * aboveRatio
+        let bottomPadding = deviceLayout.verticalGap * belowRatio
+
+        return CGRect(
+            x: frame.origin.x - leftPadding,
+            y: frame.origin.y - topPadding,
+            width: frame.width + leftPadding + rightPadding,
+            height: frame.height + topPadding + bottomPadding
+        )
+    }
+
+    private func createRowKeyData(for row: [Node], rowIndex: Int, yOffset: CGFloat, startingIndex: Int, allRows: [[Node]]) -> [KeyData] {
         let containerWidth = view.bounds.width
         let rowWidth = Node.calculateRowWidth(for: row)
         let rowStartX = (containerWidth - rowWidth) / 2
@@ -225,39 +325,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
                 let prevNode = row.indices.contains(nodeIndex - 1) ? row[nodeIndex - 1] : nil
                 let nextNode = row.indices.contains(nodeIndex + 1) ? row[nodeIndex + 1] : nil
 
-                let leftPadding: CGFloat
-                switch prevNode {
-                case .gap(let gapWidth):
-                    leftPadding = gapWidth / 2
-                case .split(let splitWidth):
-                    leftPadding = splitWidth / 2
-                case .key:
-                    leftPadding = 0.0
-                case nil:
-                    leftPadding = deviceLayout.horizontalGap
-                }
-
-                let rightPadding: CGFloat
-                switch nextNode {
-                case .gap(let gapWidth):
-                    rightPadding = gapWidth / 2
-                case .split(let splitWidth):
-                    rightPadding = splitWidth / 2
-                case .key:
-                    rightPadding = 0.0
-                case nil:
-                    rightPadding = deviceLayout.horizontalGap
-                }
-
-                let topPadding = deviceLayout.verticalGap / 2
-                let bottomPadding = deviceLayout.verticalGap / 2
-
-                let hitbox = CGRect(
-                    x: frame.origin.x - leftPadding,
-                    y: frame.origin.y - topPadding,
-                    width: frame.width + leftPadding + rightPadding,
-                    height: frame.height + topPadding + bottomPadding
-                )
+                let hitbox = calculateKeyHitbox(key: key, frame: frame, prevNode: prevNode, nextNode: nextNode, allRows: allRows, currentRow: rowIndex, currentNode: nodeIndex)
 
                 let keyData = KeyData(
                     index: startingIndex + keys.count,
