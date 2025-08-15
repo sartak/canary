@@ -299,6 +299,8 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         // Auto-unshift after inserting alternate
         autoUnshift()
 
+        refreshSuggestions()
+
         // Provide haptic feedback using the same system as regular key presses
         HapticFeedback.shared.keyPress(for: keyData.key, hasFullAccess: hasFullAccess)
     }
