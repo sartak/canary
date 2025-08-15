@@ -47,11 +47,11 @@ class SuggestionService {
         self.db = db
 
         let autocorrectService = AutocorrectService(db: db)
-        guard let typeaheadService = TypeaheadService(db: db) else {
+        guard let typeaheadService = TypeaheadService(db: db),
+              let frequencyService = FrequencyService(db: db) else {
             sqlite3_close(db)
             return nil
         }
-        let frequencyService = FrequencyService(db: db)
 
         self.autocorrectService = autocorrectService
         self.typeaheadService = typeaheadService

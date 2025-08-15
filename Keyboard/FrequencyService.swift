@@ -43,13 +43,37 @@ class FrequencyService {
     static private var initialDistribution: CharacterDistribution!
     static private var generalDistribution: CharacterDistribution!
 
-    init(db: OpaquePointer) {
+    private let bigramStatement: OpaquePointer
+    private let trigramStatement: OpaquePointer
+
+    init?(db: OpaquePointer) {
         self.db = db
+
+        var bigramStmt: OpaquePointer?
+        var trigramStmt: OpaquePointer?
+
+        let bigramQuery = "SELECT distribution FROM bigram_frequencies WHERE prefix = ?"
+        let trigramQuery = "SELECT distribution FROM trigram_frequencies WHERE prefix = ?"
+
+        guard sqlite3_prepare_v2(db, bigramQuery, -1, &bigramStmt, nil) == SQLITE_OK,
+              sqlite3_prepare_v2(db, trigramQuery, -1, &trigramStmt, nil) == SQLITE_OK,
+              let bigramStatement = bigramStmt,
+              let trigramStatement = trigramStmt else {
+
+            sqlite3_finalize(bigramStmt)
+            sqlite3_finalize(trigramStmt)
+            return nil
+        }
+
+        self.bigramStatement = bigramStatement
+        self.trigramStatement = trigramStatement
+
         FrequencyService.loadStaticDistributions(from: db)
     }
 
     deinit {
-        // No statements to finalize yet
+        sqlite3_finalize(bigramStatement)
+        sqlite3_finalize(trigramStatement)
     }
 
     private static func loadStaticDistributions(from db: OpaquePointer) {
@@ -82,11 +106,61 @@ class FrequencyService {
         sqlite3_finalize(stmt)
     }
 
+    private func loadBigramDistribution(prefix: String) -> CharacterDistribution? {
+        sqlite3_bind_text(bigramStatement, 1, prefix, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+
+        var result: CharacterDistribution?
+        if sqlite3_step(bigramStatement) == SQLITE_ROW {
+            let value = String(cString: sqlite3_column_text(bigramStatement, 0))
+            result = CharacterDistribution.fromDistributionString(value)
+        }
+
+        sqlite3_reset(bigramStatement)
+        sqlite3_clear_bindings(bigramStatement)
+        return result
+    }
+
+    private func loadTrigramDistribution(prefix: String) -> CharacterDistribution? {
+        sqlite3_bind_text(trigramStatement, 1, prefix, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+
+        var result: CharacterDistribution?
+        if sqlite3_step(trigramStatement) == SQLITE_ROW {
+            let value = String(cString: sqlite3_column_text(trigramStatement, 0))
+            result = CharacterDistribution.fromDistributionString(value)
+        }
+
+        sqlite3_reset(trigramStatement)
+        sqlite3_clear_bindings(trigramStatement)
+        return result
+    }
+
     func updateFrequencies(prefix: String, suffix: String) -> CharacterDistribution {
-        if let lastChar = prefix.last, lastChar.isLetter {
-            return FrequencyService.generalDistribution
-        } else {
+        if prefix.isEmpty || prefix.last?.isWhitespace == true {
             return FrequencyService.initialDistribution
         }
+
+        let lastTwoChars = String(prefix.suffix(2)).lowercased()
+        if lastTwoChars.count == 2 && lastTwoChars.allSatisfy({ $0.isLetter }) {
+            let startTime = CFAbsoluteTimeGetCurrent()
+            if let distribution = loadTrigramDistribution(prefix: lastTwoChars) {
+                let endTime = CFAbsoluteTimeGetCurrent()
+                let duration = (endTime - startTime) * 1000
+                print("FrequencyService: trigram '\(lastTwoChars)' in \(String(format: "%.3f", duration))ms")
+                return distribution
+            }
+        }
+
+        if let lastChar = prefix.last, lastChar.isLetter {
+            let lastCharString = String(lastChar).lowercased()
+            let startTime = CFAbsoluteTimeGetCurrent()
+            if let distribution = loadBigramDistribution(prefix: lastCharString) {
+                let endTime = CFAbsoluteTimeGetCurrent()
+                let duration = (endTime - startTime) * 1000
+                print("FrequencyService: bigram '\(lastCharString)' in \(String(format: "%.3f", duration))ms")
+                return distribution
+            }
+        }
+
+        return FrequencyService.generalDistribution
     }
 }

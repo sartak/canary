@@ -186,6 +186,22 @@ def create_database_tables(conn: sqlite3.Connection):
         ) WITHOUT ROWID
     ''')
 
+    # Bigram frequency table for contextual key hitbox expansion
+    conn.execute('''
+        CREATE TABLE bigram_frequencies (
+            prefix TEXT NOT NULL PRIMARY KEY,
+            distribution TEXT NOT NULL
+        ) WITHOUT ROWID
+    ''')
+
+    # Trigram frequency table for contextual key hitbox expansion
+    conn.execute('''
+        CREATE TABLE trigram_frequencies (
+            prefix TEXT NOT NULL PRIMARY KEY,
+            distribution TEXT NOT NULL
+        ) WITHOUT ROWID
+    ''')
+
     # Covering index for eliminating JOIN - everything needed is in the index
     conn.execute('CREATE INDEX idx_symspell_covering ON symspell_deletes (delete_hash, frequency_rank, word)')
 
@@ -285,6 +301,103 @@ def populate_kv_table(conn: sqlite3.Connection):
     print(f"Stored general letter distribution: {general_csv}")
 
 
+def populate_bigram_frequencies(conn: sqlite3.Connection):
+    """Populate the bigram_frequencies table from count_2l.txt."""
+    print("Processing bigram frequencies from count_2l.txt...")
+
+    bigram_data = {}
+
+    with open('corpus/count_2l.txt', 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                parts = line.split('\t')
+                if len(parts) == 2:
+                    bigram = parts[0].lower()
+                    count = int(parts[1])
+
+                    if len(bigram) == 2 and bigram[0].isalpha() and bigram[1].isalpha():
+                        prefix = bigram[0]
+                        suffix = bigram[1]
+
+                        if prefix not in bigram_data:
+                            bigram_data[prefix] = {}
+                        bigram_data[prefix][suffix] = count
+
+    # Convert to the format expected by the database
+    bigram_table_data = []
+    alphabet = 'abcdefghijklmnopqrstuvwxyz'
+
+    for prefix in alphabet:
+        if prefix in bigram_data:
+            # Create ordered list of counts for a-z
+            distribution = []
+            for suffix in alphabet:
+                count = bigram_data[prefix].get(suffix, 0)
+                distribution.append(str(count))
+
+            distribution_csv = ','.join(distribution)
+            bigram_table_data.append((prefix, distribution_csv))
+
+    # Insert into database
+    conn.executemany(
+        'INSERT INTO bigram_frequencies (prefix, distribution) VALUES (?, ?)',
+        bigram_table_data
+    )
+    conn.commit()
+
+    print(f"Populated bigram frequencies for {len(bigram_table_data)} prefixes")
+
+def populate_trigram_frequencies(conn: sqlite3.Connection):
+    """Populate the trigram_frequencies table from count_3l.txt."""
+    print("Processing trigram frequencies from count_3l.txt...")
+
+    trigram_data = {}
+
+    with open('corpus/count_3l.txt', 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                parts = line.split('\t')
+                if len(parts) == 2:
+                    trigram = parts[0].lower()
+                    count = int(parts[1])
+
+                    if len(trigram) == 3 and all(c.isalpha() for c in trigram):
+                        prefix = trigram[:2]  # First two letters
+                        suffix = trigram[2]   # Third letter
+
+                        if prefix not in trigram_data:
+                            trigram_data[prefix] = {}
+                        trigram_data[prefix][suffix] = count
+
+    # Convert to the format expected by the database
+    trigram_table_data = []
+    alphabet = 'abcdefghijklmnopqrstuvwxyz'
+
+    # Generate all possible 2-letter prefixes
+    for first_letter in alphabet:
+        for second_letter in alphabet:
+            prefix = first_letter + second_letter
+            if prefix in trigram_data:
+                # Create ordered list of counts for a-z
+                distribution = []
+                for suffix in alphabet:
+                    count = trigram_data[prefix].get(suffix, 0)
+                    distribution.append(str(count))
+
+                distribution_csv = ','.join(distribution)
+                trigram_table_data.append((prefix, distribution_csv))
+
+    # Insert into database
+    conn.executemany(
+        'INSERT INTO trigram_frequencies (prefix, distribution) VALUES (?, ?)',
+        trigram_table_data
+    )
+    conn.commit()
+
+    print(f"Populated trigram frequencies for {len(trigram_table_data)} prefixes")
+
 def build_filtered_corpus():
     """Build filtered corpus and write to words.txt and database."""
     print("Loading legitimate words...")
@@ -331,6 +444,8 @@ def build_filtered_corpus():
         populate_prefixes_table(conn, filtered_words, hidden_words)
         populate_symspell_tables(conn, filtered_words, hidden_words)
         populate_kv_table(conn)
+        populate_bigram_frequencies(conn)
+        populate_trigram_frequencies(conn)
 
     finally:
         conn.close()
