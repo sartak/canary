@@ -171,4 +171,8 @@ class EditingBarView: UIView {
     @objc private func handlePasteButton() {
         delegate?.editingBarPaste()
     }
+
+    func setDebugVisualizationEnabled(_ enabled: Bool) {
+        backgroundColor = enabled ? UIColor.cyan.withAlphaComponent(0.4) : UIColor.clear
+    }
 }

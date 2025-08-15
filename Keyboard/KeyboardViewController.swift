@@ -29,6 +29,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
     private var autocorrectUserDisabled = false
     var autocorrectWordDisabled = false
     var undoActions: [InputAction]?
+    private var debugVisualizationEnabled = false
 
     // Expose autocorrect state for testing/debugging
     var isAutocorrectEnabled: Bool {
@@ -100,6 +101,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         keyboardTouchView.shiftState = effectiveShiftState()
         keyboardTouchView.deviceLayout = deviceLayout
         keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
+        keyboardTouchView.showHitboxDebug = debugVisualizationEnabled
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
 
@@ -212,11 +214,20 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
             case .key(let key, let keyWidth):
                 let frame = CGRect(x: xOffset, y: yOffset, width: keyWidth, height: deviceLayout.keyHeight)
                 _ = view.bounds.width > largeScreenWidth
+
+                let debugColor: UIColor
+                if rowIndex % 2 == 0 {
+                    debugColor = keys.count % 2 == 0 ? UIColor.red.withAlphaComponent(0.4) : UIColor.blue.withAlphaComponent(0.4)
+                } else {
+                    debugColor = keys.count % 2 == 0 ? UIColor.green.withAlphaComponent(0.4) : UIColor.purple.withAlphaComponent(0.4)
+                }
+
                 let keyData = KeyData(
                     index: startingIndex + keys.count,
                     key: key,
                     viewFrame: frame,
-                    hitbox: frame
+                    hitbox: frame,
+                    debugColor: debugColor
                 )
                 key.delegate = self
                 keys.append(keyData)
@@ -448,6 +459,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         )
 
         editingBarView.delegate = self
+        editingBarView.setDebugVisualizationEnabled(debugVisualizationEnabled)
 
         UIView.performWithoutAnimation {
             view.addSubview(editingBarView)
@@ -471,6 +483,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         }
 
         view.addSubview(suggestionView)
+        suggestionView.setDebugVisualizationEnabled(debugVisualizationEnabled)
 
         // Position the suggestion view to use the full topPadding height
         let suggestionY: CGFloat = 0
@@ -569,6 +582,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         // Update display state and key data - gesture recognizer persists now
         keyboardTouchView.shiftState = effectiveShiftState
         keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
+        keyboardTouchView.showHitboxDebug = debugVisualizationEnabled
         keyboardTouchView.hasUndo = undoActions != nil
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
@@ -658,6 +672,12 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
             keyboardTouchView?.autocorrectEnabled = !autocorrectUserDisabled
             keyboardTouchView?.setNeedsDisplay()
             refreshSuggestions()
+        case .toggleDebugVisualization:
+            debugVisualizationEnabled.toggle()
+            keyboardTouchView?.showHitboxDebug = debugVisualizationEnabled
+            editingBarView?.setDebugVisualizationEnabled(debugVisualizationEnabled)
+            suggestionView?.setDebugVisualizationEnabled(debugVisualizationEnabled)
+            keyboardTouchView?.setNeedsDisplay()
         }
     }
 

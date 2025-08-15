@@ -151,4 +151,8 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         self.autocorrectWord = autocorrect
         layoutSuggestions()
     }
+
+    func setDebugVisualizationEnabled(_ enabled: Bool) {
+        backgroundColor = enabled ? UIColor.yellow.withAlphaComponent(0.4) : UIColor.clear
+    }
 }

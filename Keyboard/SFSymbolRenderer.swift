@@ -15,9 +15,10 @@ enum SFSymbolRenderer {
         theme: ColorTheme,
         pressed: Bool = false,
         autocorrectEnabled: Bool = true,
-        hasUndo: Bool = false
+        hasUndo: Bool = false,
+        debugVisualizationEnabled: Bool = false
     ) -> UIView? {
-        guard let symbolName = key.sfSymbolName(shiftState: shiftState, pressed: pressed, autocorrectEnabled: autocorrectEnabled, hasUndo: hasUndo) else {
+        guard let symbolName = key.sfSymbolName(shiftState: shiftState, pressed: pressed, autocorrectEnabled: autocorrectEnabled, hasUndo: hasUndo, debugVisualizationEnabled: debugVisualizationEnabled) else {
             return nil
         }
 

@@ -38,6 +38,8 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
     var onKeyDoubleTap: ((KeyData) -> Void)?
     var onAlternateSelected: ((String, KeyData) -> Void)?
 
+    var showHitboxDebug: Bool = false
+
     // Multi-touch gesture recognizer
     private(set) var gestureRecognizer: MultiTouchKeyboardGestureRecognizer!
 
@@ -234,7 +236,8 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
                     theme: theme,
                     pressed: isPressed,
                     autocorrectEnabled: autocorrectEnabled,
-                    hasUndo: key.key.keyType == .backspace ? hasUndo : false
+                    hasUndo: key.key.keyType == .backspace ? hasUndo : false,
+                    debugVisualizationEnabled: showHitboxDebug
                 ) as? UIImageView {
                     // Draw SF Symbol
                     let symbolImage = symbolView.image!
@@ -251,6 +254,19 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate {
                     // Fallback to text
                     drawKeyText(for: key, theme: theme)
                 }
+            }
+        }
+
+        // Draw hitbox debug visualization
+        if showHitboxDebug {
+            for key in keyData {
+                if case .empty = key.key.keyType {
+                    continue
+                }
+
+                let debugContext = UIGraphicsGetCurrentContext()
+                debugContext?.setFillColor(key.debugColor.cgColor)
+                debugContext?.fill(key.hitbox)
             }
         }
     }

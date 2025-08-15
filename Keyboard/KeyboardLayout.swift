@@ -34,12 +34,14 @@ struct KeyData {
     let key: Key
     let viewFrame: CGRect      // Visual frame for drawing
     var hitbox: CGRect         // Touch area frame for hit testing
+    var debugColor: UIColor
 
-    init(index: Int, key: Key, viewFrame: CGRect, hitbox: CGRect) {
+    init(index: Int, key: Key, viewFrame: CGRect, hitbox: CGRect, debugColor: UIColor) {
         self.index = index
         self.key = key
         self.viewFrame = viewFrame
         self.hitbox = hitbox
+        self.debugColor = debugColor
     }
 }
 
@@ -122,7 +124,7 @@ enum KeyboardLayout: Equatable {
             ]
         case .number:
             return [
-                [Key(.empty), Key(.simple("6"), longPressBehavior: .alternates(["~", "λ", "l", "L"])), Key(.simple("5"), longPressBehavior: .alternates(["\\", "°", "y", "Y"])), Key(.simple("4"), longPressBehavior: .alternates(["{", "•", "p", "P"])), Key(.empty), Key(.layoutSwitch(.qwerty)), Key(.configuration(.toggleAutocorrect)), Key(.empty), Key(.empty), apostrophe],
+                [Key(.empty), Key(.simple("6"), longPressBehavior: .alternates(["~", "λ", "l", "L"])), Key(.simple("5"), longPressBehavior: .alternates(["\\", "°", "y", "Y"])), Key(.simple("4"), longPressBehavior: .alternates(["{", "•", "p", "P"])), Key(.empty), Key(.layoutSwitch(.qwerty)), Key(.configuration(.toggleAutocorrect)), Key(.configuration(.toggleDebugVisualization)), Key(.empty), apostrophe],
                 [Key(.empty), Key(.simple("3"), longPressBehavior: .alternates(["*", "r", "R"])), Key(.simple("2"), longPressBehavior: .alternates(["=", "s", "S"])), Key(.simple("1"), longPressBehavior: .alternates(["(", "t", "T"])), Key(.simple("0"), longPressBehavior: .alternates(["<", "g", "G"])), Key(.empty), Key(.empty), Key(.empty), Key(.empty), Key(.empty)],
                 [Key(.empty), Key(.simple("9"), longPressBehavior: .alternates(["@", "£", "j", "J"])), Key(.simple("8"), longPressBehavior: .alternates(["_", "¥", "v", "V"])), Key(.simple("7"), longPressBehavior: .alternates(["[", "€", "d", "D"])), Key(.empty), Key(.empty), Key(.empty), period, comma, Key(.enter)],
                 [Key(.globe), Key(.layerSwitch(.alpha)), Key(.shift, doubleTapBehavior: .capsLock), Key(.backspace, longPressBehavior: .repeating), Key(.space), Key(.layerSwitch(.symbol))],

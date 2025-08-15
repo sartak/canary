@@ -64,6 +64,7 @@ enum FeedbackPattern: Equatable {
 
 enum Configuration: Equatable {
     case toggleAutocorrect
+    case toggleDebugVisualization
 }
 
 enum KeyType: Equatable {
@@ -207,7 +208,7 @@ class Key {
         }
     }
 
-    func sfSymbolName(shiftState: ShiftState = .unshifted, pressed: Bool = false, autocorrectEnabled: Bool = true, hasUndo: Bool = false) -> String? {
+    func sfSymbolName(shiftState: ShiftState = .unshifted, pressed: Bool = false, autocorrectEnabled: Bool = true, hasUndo: Bool = false, debugVisualizationEnabled: Bool = false) -> String? {
         switch keyType {
         case .globe:
             return "globe"
@@ -230,6 +231,8 @@ class Key {
             switch config {
             case .toggleAutocorrect:
                 return autocorrectEnabled ? "checkmark.circle" : "checkmark.circle.badge.xmark"
+            case .toggleDebugVisualization:
+                return debugVisualizationEnabled ? "square.dotted" : "star.square"
             }
         default:
             return nil
@@ -277,6 +280,8 @@ class Key {
             switch config {
             case .toggleAutocorrect:
                 return "AC"
+            case .toggleDebugVisualization:
+                return "▣"
             }
         case .empty:
             return ""
