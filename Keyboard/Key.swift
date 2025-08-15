@@ -11,7 +11,7 @@ protocol KeyActionDelegate: AnyObject {
     var textDocumentProxy: UITextDocumentProxy { get }
     var suggestionService: SuggestionService { get }
     var maybePunctuating: Bool { get }
-    var autocompleteWordDisabled: Bool { get }
+    var autocorrectWordDisabled: Bool { get }
     var undoActions: [InputAction]? { get }
 
     func switchToLayer(_ layer: Layer)
@@ -20,7 +20,7 @@ protocol KeyActionDelegate: AnyObject {
     func autoUnshift()
     func advanceToNextInputMode()
     func handleConfiguration(_ config: Configuration)
-    func toggleAutocompleteWord()
+    func toggleAutocorrectWord()
     func executeActions(_ actions: [InputAction])
     func clearUndo()
 }
@@ -108,9 +108,9 @@ class Key {
         return text.count == 1 && autocorrectTriggers.contains(text.first!)
     }
 
-    static func applyAutocorrect(to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, autocompleteWordDisabled: Bool, toggleAutocompleteWord: @escaping () -> Void, executeActions: @escaping ([InputAction]) -> Void) {
-        if autocompleteWordDisabled {
-            toggleAutocompleteWord()
+    static func applyAutocorrect(to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, autocorrectWordDisabled: Bool, toggleAutocorrectWord: @escaping () -> Void, executeActions: @escaping ([InputAction]) -> Void) {
+        if autocorrectWordDisabled {
+            toggleAutocorrectWord()
         } else {
             if let actions = suggestionService.autocorrectActions {
                 executeActions(actions)
@@ -118,9 +118,9 @@ class Key {
         }
     }
 
-    static func applyAutocorrectWithTrigger(text: String, to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, autocompleteWordDisabled: Bool, toggleAutocompleteWord: @escaping () -> Void, executeActions: @escaping ([InputAction]) -> Void) {
-        if autocompleteWordDisabled {
-            toggleAutocompleteWord()
+    static func applyAutocorrectWithTrigger(text: String, to textDocumentProxy: UITextDocumentProxy, using suggestionService: SuggestionService, autocorrectWordDisabled: Bool, toggleAutocorrectWord: @escaping () -> Void, executeActions: @escaping ([InputAction]) -> Void) {
+        if autocorrectWordDisabled {
+            toggleAutocorrectWord()
             textDocumentProxy.insertText(text)
         } else {
             if let autocorrectActions = suggestionService.autocorrectActions {
@@ -158,14 +158,14 @@ class Key {
 
                 // Check if this character should trigger autocorrect
                 if Key.shouldTriggerAutocorrect(text) {
-                    Key.applyAutocorrectWithTrigger(text: fullText, to: delegate.textDocumentProxy, using: delegate.suggestionService, autocompleteWordDisabled: delegate.autocompleteWordDisabled, toggleAutocompleteWord: delegate.toggleAutocompleteWord, executeActions: delegate.executeActions)
+                    Key.applyAutocorrectWithTrigger(text: fullText, to: delegate.textDocumentProxy, using: delegate.suggestionService, autocorrectWordDisabled: delegate.autocorrectWordDisabled, toggleAutocorrectWord: delegate.toggleAutocorrectWord, executeActions: delegate.executeActions)
                 } else {
                     delegate.textDocumentProxy.insertText(fullText)
                 }
             } else {
                 // Check if this character should trigger autocorrect
                 if Key.shouldTriggerAutocorrect(text) {
-                    Key.applyAutocorrectWithTrigger(text: text, to: delegate.textDocumentProxy, using: delegate.suggestionService, autocompleteWordDisabled: delegate.autocompleteWordDisabled, toggleAutocompleteWord: delegate.toggleAutocompleteWord, executeActions: delegate.executeActions)
+                    Key.applyAutocorrectWithTrigger(text: text, to: delegate.textDocumentProxy, using: delegate.suggestionService, autocorrectWordDisabled: delegate.autocorrectWordDisabled, toggleAutocorrectWord: delegate.toggleAutocorrectWord, executeActions: delegate.executeActions)
                 } else {
                     delegate.textDocumentProxy.insertText(text)
                 }
@@ -180,9 +180,9 @@ class Key {
         case .shift:
             delegate.toggleShift()
         case .enter:
-            Key.applyAutocorrectWithTrigger(text: "\n", to: delegate.textDocumentProxy, using: delegate.suggestionService, autocompleteWordDisabled: delegate.autocompleteWordDisabled, toggleAutocompleteWord: delegate.toggleAutocompleteWord, executeActions: delegate.executeActions)
+            Key.applyAutocorrectWithTrigger(text: "\n", to: delegate.textDocumentProxy, using: delegate.suggestionService, autocorrectWordDisabled: delegate.autocorrectWordDisabled, toggleAutocorrectWord: delegate.toggleAutocorrectWord, executeActions: delegate.executeActions)
         case .space:
-            Key.applyAutocorrectWithTrigger(text: " ", to: delegate.textDocumentProxy, using: delegate.suggestionService, autocompleteWordDisabled: delegate.autocompleteWordDisabled, toggleAutocompleteWord: delegate.toggleAutocompleteWord, executeActions: delegate.executeActions)
+            Key.applyAutocorrectWithTrigger(text: " ", to: delegate.textDocumentProxy, using: delegate.suggestionService, autocorrectWordDisabled: delegate.autocorrectWordDisabled, toggleAutocorrectWord: delegate.toggleAutocorrectWord, executeActions: delegate.executeActions)
         case .layerSwitch(let layer):
             delegate.switchToLayer(layer)
         case .layoutSwitch(let layout):

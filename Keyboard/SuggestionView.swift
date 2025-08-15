@@ -8,7 +8,7 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
     private var onAutocorrectToggle: (() -> Void)?
 
     private var autocorrectWord: String?
-    private var autocompleteWordDisabled = false
+    private var autocorrectWordDisabled = false
 
     private var scrollView: UIScrollView!
 
@@ -40,8 +40,8 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
         self.onAutocorrectToggle = onToggle
     }
 
-    func setAutocompleteWordDisabled(_ disabled: Bool) {
-        self.autocompleteWordDisabled = disabled
+    func setAutocorrectWordDisabled(_ disabled: Bool) {
+        self.autocorrectWordDisabled = disabled
         layoutSuggestions()
     }
 
@@ -106,7 +106,7 @@ class SuggestionView: UIView, SuggestionServiceDelegate {
 
         // Create autocorrect button first if available
         if let correction = autocorrectWord {
-            let button = createButton(title: correction, textColor: theme.autocorrectColor, target: #selector(autocorrectButtonTapped), leftPadding: 0, rightPadding: deviceLayout.suggestionGap, x: currentX, y: buttonY, height: buttonHeight, strikethrough: autocompleteWordDisabled)
+            let button = createButton(title: correction, textColor: theme.autocorrectColor, target: #selector(autocorrectButtonTapped), leftPadding: 0, rightPadding: deviceLayout.suggestionGap, x: currentX, y: buttonY, height: buttonHeight, strikethrough: autocorrectWordDisabled)
             scrollView.addSubview(button)
             currentX += button.frame.width
             buttons.append(button)

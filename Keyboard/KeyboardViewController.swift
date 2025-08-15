@@ -31,7 +31,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
     var maybePunctuating = false
     private var autocorrectAppDisabled = false
     private var autocorrectUserDisabled = false
-    var autocompleteWordDisabled = false
+    var autocorrectWordDisabled = false
     var undoActions: [InputAction]?
 
     // Expose autocorrect state for testing/debugging
@@ -292,8 +292,8 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
         }
 
         if Key.shouldTriggerAutocorrect(alternate) {
-            Key.applyAutocorrectWithTrigger(text: textToInsert, to: textDocumentProxy, using: suggestionService, autocompleteWordDisabled: autocompleteWordDisabled, toggleAutocompleteWord: { [weak self] in
-                self?.toggleAutocompleteWord()
+            Key.applyAutocorrectWithTrigger(text: textToInsert, to: textDocumentProxy, using: suggestionService, autocorrectWordDisabled: autocorrectWordDisabled, toggleAutocorrectWord: { [weak self] in
+                self?.toggleAutocorrectWord()
             }, executeActions: { [weak self] actions in
                 self?.executeActions(actions)
             })
@@ -570,7 +570,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
         }
 
         suggestionView.setOnAutocorrectToggle { [weak self] in
-            self?.toggleAutocompleteWord()
+            self?.toggleAutocorrectWord()
         }
 
         view.addSubview(suggestionView)
@@ -785,9 +785,9 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate {
         refreshSuggestions()
     }
 
-    func toggleAutocompleteWord() {
-        autocompleteWordDisabled.toggle()
-        suggestionView.setAutocompleteWordDisabled(autocompleteWordDisabled)
+    func toggleAutocorrectWord() {
+        autocorrectWordDisabled.toggle()
+        suggestionView.setAutocorrectWordDisabled(autocorrectWordDisabled)
     }
 
     func handleConfiguration(_ config: Configuration) {
