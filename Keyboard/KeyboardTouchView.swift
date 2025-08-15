@@ -35,6 +35,7 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate, MultiTouchKeyboard
     var onAlternateSelected: ((String, KeyData) -> Void)?
 
     var showHitboxDebug: Bool = false
+    var characterFrequencies: CharacterDistribution?
 
     // Multi-touch gesture recognizer
     private(set) var gestureRecognizer: MultiTouchKeyboardGestureRecognizer!
@@ -160,7 +161,16 @@ class KeyboardTouchView: UIView, UIGestureRecognizerDelegate, MultiTouchKeyboard
     }
 
     private func key(at location: CGPoint) -> KeyData? {
-        return keyData.first(where: { $0.hitbox.contains(location) })
+        // This method is using a heuristic; non-letter keys typically won't be
+        // affected by this decision
+        let keys = keyData.filter { $0.hitbox.contains(location) }
+        guard !keys.isEmpty else { return nil }
+
+        return keys.max { keyA, keyB in
+            let freqA = keyA.key.simpleCharacter.map { characterFrequencies?[$0] ?? 0 } ?? 0
+            let freqB = keyB.key.simpleCharacter.map { characterFrequencies?[$0] ?? 0 } ?? 0
+            return freqA < freqB
+        }
     }
 
     // MARK: - MultiTouchKeyboardGestureRecognizerDelegate

@@ -103,6 +103,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         keyboardTouchView.deviceLayout = deviceLayout
         keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
         keyboardTouchView.showHitboxDebug = debugVisualizationEnabled
+        keyboardTouchView.characterFrequencies = characterFrequencies
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
 
@@ -693,6 +694,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
         keyboardTouchView.autocorrectEnabled = !autocorrectUserDisabled
         keyboardTouchView.showHitboxDebug = debugVisualizationEnabled
         keyboardTouchView.hasUndo = undoActions != nil
+        keyboardTouchView.characterFrequencies = characterFrequencies
         keyboardTouchView.keyData = createKeyData()
         keyboardTouchView.setNeedsDisplay()
 
@@ -840,6 +842,7 @@ class KeyboardViewController: UIInputViewController, KeyActionDelegate, EditingB
 
     func suggestionService(_ service: SuggestionService, didUpdateSuggestions typeahead: [(String, [InputAction])], autocorrect: String?, frequencies: CharacterDistribution) {
         characterFrequencies = frequencies
+        keyboardTouchView?.characterFrequencies = characterFrequencies
         updateKeyHitboxes()
         suggestionView.suggestionService(service, didUpdateSuggestions: typeahead, autocorrect: autocorrect, frequencies: frequencies)
     }
