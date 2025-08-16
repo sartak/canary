@@ -90,7 +90,7 @@ struct DeviceLayout {
             suggestionFontSize: baseSmallFontSize * specialFontScale,
 
             // Popup values with appropriate scaling
-            popoutFontSize: basePopoutFontSize * widthScale,
+            popoutFontSize: basePopoutFontSize * regularFontScale,
             popoutHeight: basePopoutHeight * heightScale,
             popoutBaseWidth: basePopoutBaseWidth * widthScale,
             popoutTextVerticalRatio: 0.35,
