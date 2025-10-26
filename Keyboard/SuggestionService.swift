@@ -154,7 +154,13 @@ class SuggestionService {
             print("TypeaheadService: '\(prefixLower)|\(suffixLower)' -> \(matchingWords.count) completions in \(String(format: "%.3f", duration))ms")
         }
 
-        let suggestions = matchingWords.map { word in
+        let filteredWords = if let exact = exactMatch {
+            matchingWords.filter { $0 != exact }
+        } else {
+            matchingWords
+        }
+
+        let suggestions = filteredWords.map { word in
             let wordWithPossessive = word + possessiveSuffix
             let displayWord = applySmartCapitalization(word: wordWithPossessive, userPrefix: prefix, userSuffix: suffix, shiftState: shiftState)
             let actions = createInputActions(for: displayWord, prefix: prefix, suffix: suffix, excludeTrailingSpace: false)
