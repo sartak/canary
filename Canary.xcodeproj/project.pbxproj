@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		298BE5C52E39299800D66C92 /* Keyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 298BE5BE2E39299800D66C92 /* Keyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		29C8B2572E91F676002DAF7D /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 29C8B2562E91F676002DAF7D /* SwiftUI.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -50,6 +51,7 @@
 
 /* Begin PBXFileReference section */
 		298BE5BE2E39299800D66C92 /* Keyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Keyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		29C8B2562E91F676002DAF7D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		29F087E92E3923C400B0301D /* Canary.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Canary.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		29F087FD2E3923C500B0301D /* CanaryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CanaryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		29F088072E3923C500B0301D /* CanaryUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CanaryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -106,6 +108,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				29C8B2572E91F676002DAF7D /* SwiftUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +136,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		29C8B2552E91F676002DAF7D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				29C8B2562E91F676002DAF7D /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		29F087E02E3923C400B0301D = {
 			isa = PBXGroup;
 			children = (
@@ -140,6 +151,7 @@
 				29F088002E3923C500B0301D /* CanaryTests */,
 				29F0880A2E3923C500B0301D /* CanaryUITests */,
 				298BE5BF2E39299800D66C92 /* Keyboard */,
+				29C8B2552E91F676002DAF7D /* Frameworks */,
 				29F087EA2E3923C400B0301D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -389,6 +401,7 @@
 				INFOPLIST_FILE = Keyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Keyboard;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -398,6 +411,10 @@
 				PRODUCT_BUNDLE_IDENTIFIER = net.rpglanguage.Canary.Keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -414,6 +431,7 @@
 				INFOPLIST_FILE = Keyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Keyboard;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -423,6 +441,10 @@
 				PRODUCT_BUNDLE_IDENTIFIER = net.rpglanguage.Canary.Keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
